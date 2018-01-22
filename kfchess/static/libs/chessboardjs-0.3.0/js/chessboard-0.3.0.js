@@ -660,7 +660,8 @@ function buildPiece(piece, hidden, id) {
   'class="' + CSS.piece + '" ' +
   'data-piece="' + piece + '" ' +
   'style="width: ' + SQUARE_SIZE + 'px;' +
-  'height: ' + SQUARE_SIZE + 'px;';
+  'height: ' + SQUARE_SIZE + 'px;' +
+  'position: absolute; top: 0; left: 0;';
   if (hidden === true) {
     html += 'display:none;';
   }

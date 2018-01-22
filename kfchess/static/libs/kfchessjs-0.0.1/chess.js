@@ -1101,8 +1101,8 @@ var Chess = function(fen) {
             return generate_fen();
         },
 
-        pgn: function(options) {
-            /* using the specification from http://www.chessclub.com/help/PGN-spec
+        kfpgn: function(options) {
+            /* PGN for kung-fu chess, which is pretty similar to normal pgn but more explicit and less informative
              * example for html usage: .pgn({ max_width: 72, newline_char: "<br />" })
              */
             var newline = (typeof options === 'object' &&
@@ -1141,23 +1141,15 @@ var Chess = function(fen) {
                 var move = reversed_history.pop();
 
                 /* if the position started with black to move, start PGN with 1. ... */
-                if (!history.length && move.color === 'b') {
-                    move_string = move_number + '. ...';
+                if (move.color === 'b') {
+                    move_string = move_number + '.B';
                 } else if (move.color === 'w') {
-                    /* store the previous generated move_string if we have one */
-                    if (move_string.length) {
-                        moves.push(move_string);
-                    }
-                    move_string = move_number + '.';
+                    move_string = move_number + '.W';
                 }
 
-                move_string = move_string + ' ' + move_to_san(move, false);
-                make_move(move);
-            }
-
-            /* are there any other leftover moves? */
-            if (move_string.length) {
+                move_string = move_string + '' + move_to_san(move, false);
                 moves.push(move_string);
+                make_move(move);
             }
 
             /* is there a result? */
