@@ -57,8 +57,6 @@ $(window).ready(function() {
     //------------------------------------------------------------------------------
 
     socket.on('move-cnf', function(move_desc) {
-      console.log("received move ");
-      console.log(move_desc);
       var move = game.move(move_desc, {
         ignore_color: true,
         cd: cd
@@ -66,6 +64,7 @@ $(window).ready(function() {
       if (move === null)
       {
         //TODO: Error getting move, ask for resync
+        console.log("Invalid move received, (not) requesting sync");
         return;
       }
 
@@ -147,8 +146,6 @@ $(window).ready(function() {
       }
       var randomIndex = Math.floor(Math.random() * possibleMoves.length);
 
-      console.log("requesting move ");
-      console.log(possibleMoves[randomIndex]);
       socket.emit('move-req', possibleMoves[randomIndex]); // request the move
       window.setTimeout(makeRandomMoves, 500);
     };

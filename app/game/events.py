@@ -12,6 +12,8 @@ from app import socketio
 def handle_game_move(move):
     # TODO here: Legality check
     print('received move {}'.format(move))
+    if not move:
+        return
     socketio.emit('move-cnf',
                   {'from': move['from'], 'to': move['to'], 'promotion': move.get('promotion', 'q'), 'time': now()}, # TODO: move building will move to tester
                   namespace="/game")
@@ -25,11 +27,4 @@ def handle_disconnect():
     print('Disconnect')
 
 
-########################################################################################################
-# Utility functions                                                                                    #
-########################################################################################################
-
-def now():
-    """ Return current time in miliseconds since epoch """
-    return int(datetime.datetime.now().timestamp() * 1000)
 
