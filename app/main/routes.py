@@ -1,6 +1,6 @@
-from kfchess import app
+from app.main import main
 import flask
 
-@app.route('/')
+@main.route('/')
 def index():
     return flask.render_template("base.html")

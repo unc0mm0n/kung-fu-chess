@@ -1,5 +1,5 @@
 import flask
-from kfchess.game import game
+from app.game import game
 
 @game.route('/')
 def index():
