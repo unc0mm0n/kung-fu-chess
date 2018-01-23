@@ -1,20 +1,24 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <title>My Webpage</title>
-    <link rel="stylesheet" type="text/css"
-          href="{{ url_for('static', filename='libs/chessboardjs-0.3.0/css/chessboard-0.3.0.min.css')}}">
-    <script src="{{ url_for('static', filename='libs/kfchessjs-0.0.1/chess.js')}}"></script>
-    <script src="{{ url_for('static', filename='libs/jquery-3.3.1.min.js')}}"></script>
+    <title>{%block title %}Home{% endblock %}</title>
+    {% block page_headers %}
+
+    {% endblock page_headers %}
 </head>
 <body>
+    {# header #}
+    <h1>{{self.title()}}</h1>
     <ul id="navigation">
     </ul>
 
-    <h1>Chess</h1>
-    <div id="board" style="width:400px"></div>
-    <script src="{{ url_for('static', filename='libs/chessboardjs-0.3.0/js/chessboard-0.3.0.js')}}"></script>
-    <script src="{{ url_for('static', filename='scripts/board.js')}}"></script>
+    {# content #}
+    {% block page_content %}
+        Welcome to KFChess
+    {% endblock page_content %}
+
+    {# footer #}
+    <h1>{{self.title()}}</h1>
 
 </body>
 </html>
