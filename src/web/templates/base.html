@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
     <title>{%block title %}Home{% endblock %}</title>
+    <script src="{{ url_for('main.static', filename='libs/jquery-3.3.1.min.js')}}"></script>
     <script src="{{ url_for('main.static', filename='libs/socket.io.js')}}"></script>
     {% block page_headers %}
 
