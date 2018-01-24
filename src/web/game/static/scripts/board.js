@@ -59,7 +59,8 @@ $(window).ready(function() {
     socket.on('move-cnf', function(move_desc) {
       var move = game.move(move_desc, {
         ignore_color: true,
-        cd: cd
+        cd: cd,
+        time: move_desc.time
       });
       if (move === null)
       {

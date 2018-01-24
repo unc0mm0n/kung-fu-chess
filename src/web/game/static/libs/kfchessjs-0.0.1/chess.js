@@ -735,7 +735,7 @@ var Chess = function(fen) {
         });
     }
 
-    function make_move(move) {
+    function make_move(move, time) {
         var us = move.color;
         var them = swap_color(us);
         var original_time = board[move.from].last_move_time;
@@ -746,7 +746,7 @@ var Chess = function(fen) {
             kings[board[move.to].color] = EMPTY;
         }
         board[move.to] = board[move.from];
-        board[move.to].last_move_time = Date.now();
+        board[move.to].last_move_time = time;
         board[move.from] = null;
 
         /* if ep capture, remove the captured pawn */
@@ -760,7 +760,7 @@ var Chess = function(fen) {
 
         /* if pawn promotion, replace with new piece */
         if (move.flags & BITS.PROMOTION) {
-            board[move.to] = {type: move.promotion, color: us, last_move_time : Date.now()};
+            board[move.to] = {type: move.promotion, color: us, last_move_time : time};
         }
 
         /* if we moved the king */
@@ -1370,8 +1370,12 @@ var Chess = function(fen) {
             /* need to make a copy of move because we can't generate SAN after the
              * move is made
              */
-
-            make_move(move_obj);
+            var time = Date.now()
+            if ("time" in options)
+            {
+                time = options.time;
+            }
+            make_move(move_obj, time);
 
             var pretty_move = make_pretty(move_obj);
             return pretty_move;

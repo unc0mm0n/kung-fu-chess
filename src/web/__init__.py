@@ -7,10 +7,10 @@ def create_app():
     app = Flask(__name__)
 
     # this weird local import on create seems to be necessitated by flask-socketio's lack of support of blueprints
-    from app.main import main
+    from web.main import main
     app.register_blueprint(main, url_prefix='/')
 
-    from app.game import game
+    from web.game import game
     app.register_blueprint(game, url_prefix='/game')
 
     socketio.init_app(app)

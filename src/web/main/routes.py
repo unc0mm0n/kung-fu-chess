@@ -1,4 +1,4 @@
-from app.main import main
+from web.main import main
 import flask
 
 @main.route('/')

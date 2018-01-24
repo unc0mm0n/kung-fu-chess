@@ -1,5 +1,5 @@
 import flask
-from app.game import game
+from web.game import game
 
 @game.route('/')
 def index():
