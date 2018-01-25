@@ -31,8 +31,6 @@ def handle_sync_req(game_id):
     """ ask to be synced about the state of the game """
     # TODO: verify users, join rooms, etc.
     if game_id not in manager:  # TODO: more recoveries here (maybe game should be loaded from db)
-        print(manager._games, repr(game_id))
-        print(game_id in manager, game_id in manager._games)
         emit('sync-cnf', {'result': FAIL, 'reason': 'Unknown game id {}.'.format(game_id)})
         return
 

@@ -1426,11 +1426,12 @@ widget.position = function(position, useAnimation) {
 
   if (useAnimation === true) {
     // start the animations
-    doAnimations(calculateAnimations(CURRENT_POSITION, position),
-      CURRENT_POSITION, position);
+    var res = calculateAnimations(CURRENT_POSITION, position);
+    doAnimations(res, CURRENT_POSITION, position);
 
     // set the new position
     setCurrentPosition(position);
+    return res
   }
   // instant update
   else {

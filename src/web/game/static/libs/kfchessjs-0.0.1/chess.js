@@ -705,11 +705,13 @@ var Chess = function(nfen) {
                 var castling_to = move.to - 1;
                 var castling_from = move.to + 1;
                 board[castling_to] = board[castling_from];
+                board[castling_to].last_move_time = time;
                 board[castling_from] = null;
             } else if (move.flags & BITS.QSIDE_CASTLE) {
                 var castling_to = move.to + 1;
                 var castling_from = move.to - 2;
                 board[castling_to] = board[castling_from];
+                board[castling_to].last_move_time = time;
                 board[castling_from] = null;
             }
 
