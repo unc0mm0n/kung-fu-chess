@@ -166,7 +166,7 @@ $(window).ready(function() {
     };
 
     var onMouseoverSquare = function(square, piece) {
-      if (game.game_over() === true) {
+      if (game == undefined || game.game_over() === true) {
         return;
       }
       // get list of possible moves for this square
