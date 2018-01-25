@@ -608,7 +608,6 @@ var Chess = function(nfen) {
 
     function is_won()
     {
-        console.log(kings);
         return (kings[WHITE] == EMPTY || kings[BLACK] == EMPTY);
     }
 

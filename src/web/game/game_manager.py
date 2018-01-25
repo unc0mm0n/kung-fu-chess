@@ -27,9 +27,10 @@ class Manager():
         """ move is a dict with 'from' and 'to' keys representing the move, and 'promotion' if relevant. """
         if id not in self._games:
             raise ManagerIdError("id {} not found".format(id))
+        if move is None:
+            return None
         game = self._games[id]
         if game.winner != EMPTY:
-            print("game over man")
             return None
 
         if 'promotion' in move:

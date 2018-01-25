@@ -21,7 +21,6 @@ $(window).ready(function() {
      * start is optional timestamp to start counting from. Will use Date.now() if none given.
      */
     function disableSquare(sq, duration, start) {
-      console.log('disabling' + sq, duration, start);
       if (start == undefined || typeof start !== 'number') {
         start = Date.now();
       }
@@ -47,7 +46,6 @@ $(window).ready(function() {
         setTimeout(disableSquareRec, Math.max(0, interval - dt), start, expected, total, elem, sq); // take into account drift
       }
       else {
-        console.log('freeing' + sq);
         disabledSquares[sq] = false;
         elem.contents().unwrap();
 
@@ -62,6 +60,9 @@ $(window).ready(function() {
 
       if (sync_desc['result'] == 'fail') { // invalid id or not id
         //TODO: should handle in informative way, shouldn't really happen though
+        console.log("failed to sync", sync_desc);
+        location.reload();
+        return
       }
 
       console.log("received sync");
@@ -81,7 +82,7 @@ $(window).ready(function() {
 
       if (move_desc['result'] == 'fail') { // move was illegal, update board and ask for resync
         console.log('illegal move response received');
-        socket.emit("sync-req", {id: 1});
+        socket.emit("sync-req", game_id);
         board.position(game.nfen());
         return;
       }
@@ -96,7 +97,7 @@ $(window).ready(function() {
       if (move === null)
       {
         console.log("Invalid move received, (not) requesting sync");
-        socket.emit("sync-req", {id: 1});
+        socket.emit("sync-req", game_id);
         return;
       }
 
@@ -137,7 +138,7 @@ $(window).ready(function() {
 
       if (move !== null) { // client decided move is legal
         // now verify on server
-        socket.emit('move-req', move);
+        socket.emit('move-req', game_id, move);
       }
       else {
         return 'snapback'
@@ -149,7 +150,7 @@ $(window).ready(function() {
     //------------------------------------------------------------------------------
     // Finally do something
     //------------------------------------------------------------------------------
-    socket.emit("sync-req", {id: 1});
+    socket.emit("sync-req", game_id);
 
     var game;
     var disabledSquares = {};
@@ -169,18 +170,18 @@ $(window).ready(function() {
     var makeRandomMoves = function() {
       var possibleMoves = game.moves({
         ignore_color: true,
-        cooldown_time: 4000
+        cooldown_time: cd
       });
       if (game.game_over() === true) {
         return;
       }
       var randomIndex = Math.floor(Math.random() * possibleMoves.length);
 
-      socket.emit('move-req', possibleMoves[randomIndex]); // request the move
+      socket.emit('move-req', game_id, possibleMoves[randomIndex]); // request the move
       window.setTimeout(makeRandomMoves, 500);
     };
 
-    //window.setTimeout(makeRandomMoves, 500);
+    window.setTimeout(makeRandomMoves, 500);
 
     // be nice citizens and close the socket
     $(window).on('beforeunload', function () {

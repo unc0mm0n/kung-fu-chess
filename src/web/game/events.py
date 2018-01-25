@@ -3,52 +3,40 @@ Event handler for game Blueprint, handles socket.io events connecting the server
 """
 
 from web import socketio
-from flask_socketio import emit, send
+from flask_socketio import emit, join_room, rooms
 from web.game import manager
 
 SUCCESS = 'success'
 FAIL    = 'fail'
 
 @socketio.on('move-req', namespace='/game')
-def handle_game_move(move_json):
+def handle_game_move(game_id, move_json):
     """ ask to play a move """
-    move = manager.move_game(1, move_json)  #TODO: Add users layer somewhere..
-    if not move:
-        print("illegal move {}".format(move_json))
-        emit('move-cnf', {'result': FAIL})  # send only to requester
+    if game_id not in rooms():
+        # room id mismatch
+        emit('move-cnf', {'result': FAIL, 'reason': 'invalid game_id'})  # send only to requester
         return
-    socketio.emit('move-cnf',
-                  {'result': SUCCESS, 'from': move.from_sq.san, 'to': move.to_sq.san, 'promotion': move.promote, 'time': move.time},
-                  namespace="/game")
+
+    move = manager.move_game(game_id, move_json)  #TODO: Add users layer somewhere..
+    if not move:
+        emit('move-cnf', {'result': FAIL, 'reason': 'illegal move'})  # send only to requester
+        return
+    emit('move-cnf',
+         {'result': SUCCESS, 'from': move.from_sq.san, 'to': move.to_sq.san, 'promotion': move.promote, 'time': move.time},
+         room=game_id,
+         namespace="/game")
 
 @socketio.on('sync-req', namespace='/game')
-def handle_sync_req(req_json):
+def handle_sync_req(game_id):
     """ ask to be synced about the state of the game """
     # TODO: verify users, join rooms, etc.
-    if 'id' not in req_json:
-        emit('sync-cnf', {'result': FAIL, 'reason': 'missing id.'})
-        return
-    try:
-        id = int(req_json['id'])
-    except ValueError:
-        emit('sync-cnf', {'result': FAIL, 'reason': 'badly formatted id.'})
+    if game_id not in manager:  # TODO: more recoveries here (maybe game should be loaded from db)
+        print(manager._games, repr(game_id))
+        print(game_id in manager, game_id in manager._games)
+        emit('sync-cnf', {'result': FAIL, 'reason': 'Unknown game id {}.'.format(game_id)})
         return
 
-    if id not in manager:  # TODO: more recoveries here (maybe game should be loaded from db)
-        emit('sync-cnf', {'result': FAIL, 'reason': 'Unknown game id.'})
-        return
+    join_room(game_id)
 
-    emit('sync-cnf', {'result': SUCCESS, 'board': manager.build_game_dict(id)})
+    emit('sync-cnf', {'result': SUCCESS, 'board': manager.build_game_dict(game_id)})
     return
-
-
-@socketio.on('connect')
-def handle_connect():
-    print('Connect')
-
-@socketio.on('disconnect')
-def handle_disconnect():
-    print('Disconnect')
-
-
-
