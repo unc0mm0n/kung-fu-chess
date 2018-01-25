@@ -136,6 +136,8 @@ $(window).ready(function() {
     };
 
     var onDrop = function (source, target) {
+      removeAvailableSquares(); // first unmark squares
+
       // get all legal moves from source
       // see if move to target is there
       var piece_moves = game.moves({
@@ -161,7 +163,6 @@ $(window).ready(function() {
         return 'snapback'
       }
       // we let the move happen, will be fixed after server checks the move anyway
-
     };
 
     var onMouseoverSquare = function(square, piece) {
@@ -176,9 +177,9 @@ $(window).ready(function() {
         verbose: true
       });
 
-      // exit if there are no moves available for this square
-      if (moves.length === 0) return;
-
+      if (piece === false) {  // Todo: check piece color as well
+        return;
+      }
       // highlight the square they moused over
       setSquareAvailable(square);
 
