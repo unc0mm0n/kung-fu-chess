@@ -21,6 +21,7 @@ $(window).ready(function() {
      * start is optional timestamp to start counting from. Will use Date.now() if none given.
      */
     function disableSquare(sq, duration, start) {
+      console.log('disabling' + sq, duration, start);
       if (start == undefined || typeof start !== 'number') {
         start = Date.now();
       }
@@ -46,6 +47,7 @@ $(window).ready(function() {
         setTimeout(disableSquareRec, Math.max(0, interval - dt), start, expected, total, elem, sq); // take into account drift
       }
       else {
+        console.log('freeing' + sq);
         disabledSquares[sq] = false;
         elem.contents().unwrap();
 
@@ -56,7 +58,36 @@ $(window).ready(function() {
     // socket handlers
     //------------------------------------------------------------------------------
 
+    socket.on('sync-cnf', function(sync_desc) {
+
+      if (sync_desc['result'] == 'fail') { // invalid id or not id
+        //TODO: should handle in informative way, shouldn't really happen though
+      }
+
+      console.log("received sync");
+      console.log(sync_desc);
+      cd = sync_desc.board.cd;
+      var nfen = sync_desc.board.nfen;
+      game = Chess(nfen);
+      board.position(game.nfen());
+
+      for (var [key, value] of Object.entries(sync_desc.board.times)) {
+        disableSquare(key, cd, value)
+      }
+    });
+
+
     socket.on('move-cnf', function(move_desc) {
+
+      if (move_desc['result'] == 'fail') { // move was illegal, update board and ask for resync
+        console.log('illegal move response received');
+        socket.emit("sync-req", {id: 1});
+        board.position(game.nfen());
+        return;
+      }
+
+      console.log("received move");
+      console.log(move_desc);
       var move = game.move(move_desc, {
         ignore_color: true,
         cd: cd,
@@ -64,12 +95,12 @@ $(window).ready(function() {
       });
       if (move === null)
       {
-        //TODO: Error getting move, ask for resync
         console.log("Invalid move received, (not) requesting sync");
+        socket.emit("sync-req", {id: 1});
         return;
       }
 
-      board.position(game.fen());
+      board.position(game.nfen());
       disableSquare(move.to, cd, move_desc.time);
     });
 
@@ -106,8 +137,6 @@ $(window).ready(function() {
 
       if (move !== null) { // client decided move is legal
         // now verify on server
-        console.log('emitting move');
-        console.log(move);
         socket.emit('move-req', move);
       }
       else {
@@ -120,9 +149,9 @@ $(window).ready(function() {
     //------------------------------------------------------------------------------
     // Finally do something
     //------------------------------------------------------------------------------
-    console.log("connected");
+    socket.emit("sync-req", {id: 1});
 
-    var game = new Chess();
+    var game;
     var disabledSquares = {};
 
     var cfg = {
@@ -140,7 +169,7 @@ $(window).ready(function() {
     var makeRandomMoves = function() {
       var possibleMoves = game.moves({
         ignore_color: true,
-        cooldown_time: 5000
+        cooldown_time: 4000
       });
       if (game.game_over() === true) {
         return;
@@ -151,7 +180,7 @@ $(window).ready(function() {
       window.setTimeout(makeRandomMoves, 500);
     };
 
-    window.setTimeout(makeRandomMoves, 500);
+    //window.setTimeout(makeRandomMoves, 500);
 
     // be nice citizens and close the socket
     $(window).on('beforeunload', function () {

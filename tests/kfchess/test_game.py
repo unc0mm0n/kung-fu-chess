@@ -38,13 +38,29 @@ def test_FromNfen():
     assert kfc._board.ascii == "...b....\nNP......\nrp..k.B.\n..R...P.\n...K....\n..B..Q..\nP.P...P.\n....r...\n"
 
     with pytest.raises(ValueError):
-        kfc = KungFuChess.FromNfen(1000, "r6r/pbppqppp/1pn2n2/4p3/1bB5/2NPPN2/PPPBQPPP/R6R KQkq 8")
+       KungFuChess.FromNfen(1000, "r6r/pbppqppp/1pn2n2/4p3/1bB5/2NPPN2/PPPBQPPP/R6R KQkq 8")
 
     with pytest.raises(ValueError):
-        kfc = KungFuChess.FromNfen(1000, "r3K2r/pbppqppp/1pn2n2/4p3/1bB5/2NPPN2/PPPBQPPP/R3K2R KQkq 8")
+        KungFuChess.FromNfen(1000, "r3K2r/pbppqppp/1pn2n2/4p3/1bB5/2NPPN2/PPPBQPPP/R3K2R KQkq 8")
 
     with pytest.raises(ValueError):
-        kfc = KungFuChess.FromNfen(1000, "r3k2r/pbppqppp/1pn1Kn2/4p3/1bB5/2NPPN2/PPPBQPPP/R3K2R KQkq 8")
+        KungFuChess.FromNfen(1000, "r3k2r/pbppqppp/1pn1Kn2/4p3/1bB5/2NPPN2/PPPBQPPP/R3K2R KQkq 8")
+
+def test_board_fen():
+    kfc = KungFuChess.FromNfen(0)
+    assert kfc._board.fen == "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR"
+
+    kfc = KungFuChess.FromNfen(1000, "r3k2r/pbppqppp/1pn2n2/4p3/1bB5/2NPPN2/PPPBQPPP/R3K2R KQkq 8")
+    assert kfc._board.fen == "r3k2r/pbppqppp/1pn2n2/4p3/1bB5/2NPPN2/PPPBQPPP/R3K2R"
+
+    kfc = KungFuChess.FromNfen(1000, "r3k2r/pbppqppp/1pn2n2/4p3/1bB5/2NPPN2/PPPBQPPP/R6R KQkq 8")
+    assert kfc._board.fen == "r3k2r/pbppqppp/1pn2n2/4p3/1bB5/2NPPN2/PPPBQPPP/R6R"
+
+    kfc = KungFuChess.FromNfen(1000, "r6r/pbppqppp/1pn2n2/4p3/1bB5/2NPPN2/PPPBQPPP/R3K2R KQkq 8")
+    assert kfc._board.fen == "r6r/pbppqppp/1pn2n2/4p3/1bB5/2NPPN2/PPPBQPPP/R3K2R"
+
+    kfc = KungFuChess.FromNfen(0, "3b4/NP6/rp2k1B1/2R3P1/3K4/2B2Q2/P1P3P1/4r3 - 1")
+    assert kfc._board.fen == "3b4/NP6/rp2k1B1/2R3P1/3K4/2B2Q2/P1P3P1/4r3"
 
 def test_board_get_piece():
     board = KungFuChess.FromNfen(0)._board
@@ -259,6 +275,39 @@ def test_move_simple():
 
     assert kfc.move('e8', 'g8') is None  # no castle after rook move
 
+def test_moves_pawn_capture():
+    kfc = KungFuChess.FromNfen(0)
+    kfc.move('e2', 'e4')
+    kfc.move('f7', 'f5')
+    kfc.move('d7', 'd5')
+    assert kfc._board.ascii == "rnbqkbnr\n" \
+                               "ppp.p.pp\n" \
+                               "........\n" \
+                               "...p.p..\n" \
+                               "....P...\n" \
+                               "........\n" \
+                               "PPPP.PPP\n" \
+                               "RNBQKBNR\n"
+
+    print(kfc._board.ascii)
+    res = [m.to_sq.san for m in kfc.moves('e4')]  # pawn captures
+    ex = ['d5', 'e5', 'f5']
+    assert (len(res) == len(ex))
+    for move in res:
+        assert move in ex
+    for move in ex:
+        assert move in res
+
+    assert kfc.move('e4', 'd5') is not None
+    assert kfc._board.ascii == "rnbqkbnr\n" \
+                               "ppp.p.pp\n" \
+                               "........\n" \
+                               "...P.p..\n" \
+                               "........\n" \
+                               "........\n" \
+                               "PPPP.PPP\n" \
+                               "RNBQKBNR\n"
+
 def test_move_time_delay():
     kfc = KungFuChess.FromNfen(1000)  # delay between moves in ms
     kfc.move('e2', 'e4')
@@ -328,7 +377,7 @@ def test_move_castle_rook_delayed():
                                "PPPBQPPP\n" \
                                "R...R.K.\n"
 
-def test_move_winner():
+def test_game_winner_setup():
     kfc = KungFuChess.FromNfen(1000, "r3k2r/pbppqppp/1pn2n2/4p3/1bB5/2NPPN2/PPPBQPPP/R3K2R KQkq 8")
     assert kfc._board.ascii == "r...k..r\n" \
                                "pbppqppp\n" \
@@ -363,4 +412,23 @@ def test_move_winner():
                                "PPPBQPPP\n" \
                                "R...K..R\n"
 
+    assert kfc.winner == WHITE
+
+def test_game_winner_capture():
+    kfc = KungFuChess.FromNfen(0)
+    assert kfc.move('e2', 'e4') is not None
+    assert kfc.move('f7', 'f6') is not None
+    assert kfc.move('e8', 'f7') is not None
+    assert kfc.move('f1', 'c4') is not None
+    assert kfc.move('c4', 'f7') is not None
+
+    assert kfc._board.ascii == "rnbq.bnr\n" \
+                               "pppppBpp\n" \
+                               ".....p..\n" \
+                               "........\n" \
+                               "....P...\n" \
+                               "........\n" \
+                               "PPPP.PPP\n" \
+                               "RNBQK.NR\n"
+    assert kfc._kings[BLACK] == Square.O()
     assert kfc.winner == WHITE

@@ -41,7 +41,7 @@
  * - Remove check/mate tests, and all draws apart of insufficient material
  * - Allow king capture
  */
-var Chess = function(fen) {
+var Chess = function(nfen) {
 
     /* jshint indent: false */
 
@@ -59,7 +59,7 @@ var Chess = function(fen) {
 
     var SYMBOLS = 'pnbrqkPNBRQK';
 
-    var DEFAULT_POSITION = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
+    var DEFAULT_POSITION = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR KQkq 1';
 
     var POSSIBLE_RESULTS = ['1-0', '0-1', '1/2-1/2', '*'];
 
@@ -75,44 +75,6 @@ var Chess = function(fen) {
         q: [-17, -16, -15,   1,  17, 16, 15,  -1],
         k: [-17, -16, -15,   1,  17, 16, 15,  -1]
     };
-
-    var ATTACKS = [
-        20, 0, 0, 0, 0, 0, 0, 24,  0, 0, 0, 0, 0, 0,20, 0,
-        0,20, 0, 0, 0, 0, 0, 24,  0, 0, 0, 0, 0,20, 0, 0,
-        0, 0,20, 0, 0, 0, 0, 24,  0, 0, 0, 0,20, 0, 0, 0,
-        0, 0, 0,20, 0, 0, 0, 24,  0, 0, 0,20, 0, 0, 0, 0,
-        0, 0, 0, 0,20, 0, 0, 24,  0, 0,20, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0,20, 2, 24,  2,20, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 2,53, 56, 53, 2, 0, 0, 0, 0, 0, 0,
-        24,24,24,24,24,24,56,  0, 56,24,24,24,24,24,24, 0,
-        0, 0, 0, 0, 0, 2,53, 56, 53, 2, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0,20, 2, 24,  2,20, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0,20, 0, 0, 24,  0, 0,20, 0, 0, 0, 0, 0,
-        0, 0, 0,20, 0, 0, 0, 24,  0, 0, 0,20, 0, 0, 0, 0,
-        0, 0,20, 0, 0, 0, 0, 24,  0, 0, 0, 0,20, 0, 0, 0,
-        0,20, 0, 0, 0, 0, 0, 24,  0, 0, 0, 0, 0,20, 0, 0,
-        20, 0, 0, 0, 0, 0, 0, 24,  0, 0, 0, 0, 0, 0,20
-    ];
-
-    var RAYS = [
-        17,  0,  0,  0,  0,  0,  0, 16,  0,  0,  0,  0,  0,  0, 15, 0,
-        0, 17,  0,  0,  0,  0,  0, 16,  0,  0,  0,  0,  0, 15,  0, 0,
-        0,  0, 17,  0,  0,  0,  0, 16,  0,  0,  0,  0, 15,  0,  0, 0,
-        0,  0,  0, 17,  0,  0,  0, 16,  0,  0,  0, 15,  0,  0,  0, 0,
-        0,  0,  0,  0, 17,  0,  0, 16,  0,  0, 15,  0,  0,  0,  0, 0,
-        0,  0,  0,  0,  0, 17,  0, 16,  0, 15,  0,  0,  0,  0,  0, 0,
-        0,  0,  0,  0,  0,  0, 17, 16, 15,  0,  0,  0,  0,  0,  0, 0,
-        1,  1,  1,  1,  1,  1,  1,  0, -1, -1,  -1,-1, -1, -1, -1, 0,
-        0,  0,  0,  0,  0,  0,-15,-16,-17,  0,  0,  0,  0,  0,  0, 0,
-        0,  0,  0,  0,  0,-15,  0,-16,  0,-17,  0,  0,  0,  0,  0, 0,
-        0,  0,  0,  0,-15,  0,  0,-16,  0,  0,-17,  0,  0,  0,  0, 0,
-        0,  0,  0,-15,  0,  0,  0,-16,  0,  0,  0,-17,  0,  0,  0, 0,
-        0,  0,-15,  0,  0,  0,  0,-16,  0,  0,  0,  0,-17,  0,  0, 0,
-        0,-15,  0,  0,  0,  0,  0,-16,  0,  0,  0,  0,  0,-17,  0, 0,
-        -15,  0,  0,  0,  0,  0,  0,-16,  0,  0,  0,  0,  0,  0,-17
-    ];
-
-    var SHIFTS = { p: 0, n: 1, b: 2, r: 3, q: 4, k: 5 };
 
     var FLAGS = {
         NORMAL: 'n',
@@ -132,8 +94,6 @@ var Chess = function(fen) {
         PROMOTION: 16,
         KSIDE_CASTLE: 32,
         QSIDE_CASTLE: 64,
-        CHECK: 1 << 8,
-        MATE: 1 << 9
     };
 
     var RANK_1 = 7;
@@ -173,13 +133,13 @@ var Chess = function(fen) {
     var history = [];
     var header = {};
 
-    /* if the user passes in a fen string, load it, else default to
+    /* if the user passes in a nfen string, load it, else default to
      * starting position
      */
-    if (typeof fen === 'undefined') {
+    if (typeof nfen === 'undefined') {
         load(DEFAULT_POSITION);
     } else {
-        load(fen);
+        load(nfen);
     }
 
     function clear() {
@@ -192,19 +152,21 @@ var Chess = function(fen) {
         move_number = 1;
         history = [];
         header = {};
-        update_setup(generate_fen());
+        update_setup(generate_nfen());
     }
 
     function reset() {
         load(DEFAULT_POSITION);
     }
 
-    function load(fen) {
-        var tokens = fen.split(/\s+/);
+    function load(nfen) {
+        var tokens = nfen.split(/\s+/);
         var position = tokens[0];
         var square = 0;
 
-        if (!validate_fen(fen).valid) {
+        if (!validate_nfen(nfen).valid) {
+            console.log("Invalid nfen!");
+            console.log(validate_nfen(nfen));
             return false;
         }
 
@@ -224,26 +186,22 @@ var Chess = function(fen) {
             }
         }
 
-        turn = tokens[1];
-
-        if (tokens[2].indexOf('K') > -1) {
+        if (tokens[1].indexOf('K') > -1) {
             castling.w |= BITS.KSIDE_CASTLE;
         }
-        if (tokens[2].indexOf('Q') > -1) {
+        if (tokens[1].indexOf('Q') > -1) {
             castling.w |= BITS.QSIDE_CASTLE;
         }
-        if (tokens[2].indexOf('k') > -1) {
+        if (tokens[1].indexOf('k') > -1) {
             castling.b |= BITS.KSIDE_CASTLE;
         }
-        if (tokens[2].indexOf('q') > -1) {
+        if (tokens[1].indexOf('q') > -1) {
             castling.b |= BITS.QSIDE_CASTLE;
         }
 
-        ep_square = (tokens[3] === '-') ? EMPTY : SQUARES[tokens[3]];
-        half_moves = parseInt(tokens[4], 10);
-        move_number = parseInt(tokens[5], 10);
+        move_number = parseInt(tokens[2], 10);
 
-        update_setup(generate_fen());
+        update_setup(generate_nfen());
 
         return true;
     }
@@ -253,57 +211,38 @@ var Chess = function(fen) {
      * ... we should rewrite this, and ditch the silly error_number field while
      * we're at it
      */
-    function validate_fen(fen) {
+    function validate_nfen(nfen) {
         var errors = {
             0: 'No errors.',
-            1: 'FEN string must contain six space-delimited fields.',
-            2: '6th field (move number) must be a positive integer.',
-            3: '5th field (half move counter) must be a non-negative integer.',
-            4: '4th field (en-passant square) is invalid.',
-            5: '3rd field (castling availability) is invalid.',
-            6: '2nd field (side to move) is invalid.',
-            7: '1st field (piece positions) does not contain 8 \'/\'-delimited rows.',
-            8: '1st field (piece positions) is invalid [consecutive numbers].',
-            9: '1st field (piece positions) is invalid [invalid piece].',
-            10: '1st field (piece positions) is invalid [row too large].',
-            11: 'Illegal en-passant square',
+            1: 'nFEN string must contain three space-delimited fields.',
+            2: '3rd field (move number) must be a positive integer.',
+            3: '2nd field (castling availability) is invalid.',
+            4: '1st field (piece positions) does not contain 8 \'/\'-delimited rows.',
+            5: '1st field (piece positions) is invalid [consecutive numbers].',
+            6: '1st field (piece positions) is invalid [invalid piece].',
+            7: '1st field (piece positions) is invalid [row too large].'
         };
 
-        /* 1st criterion: 6 space-seperated fields? */
-        var tokens = fen.split(/\s+/);
-        if (tokens.length !== 6) {
+        /* 1st criterion: 3 space-seperated fields? */
+        var tokens = nfen.split(/\s+/);
+        if (tokens.length !== 3) {
             return {valid: false, error_number: 1, error: errors[1]};
         }
 
         /* 2nd criterion: move number field is a integer value > 0? */
-        if (isNaN(tokens[5]) || (parseInt(tokens[5], 10) <= 0)) {
+        if (isNaN(tokens[2]) || (parseInt(tokens[2], 10) <= 0)) {
             return {valid: false, error_number: 2, error: errors[2]};
         }
 
-        /* 3rd criterion: half move counter is an integer >= 0? */
-        if (isNaN(tokens[4]) || (parseInt(tokens[4], 10) < 0)) {
+        /* 5th criterion: 2nd field is a valid castle-string? */
+        if( !/^(KQ?k?q?|Qk?q?|kq?|q|-)$/.test(tokens[1])) {
             return {valid: false, error_number: 3, error: errors[3]};
-        }
-
-        /* 4th criterion: 4th field is a valid e.p.-string? */
-        if (!/^(-|[abcdefgh][36])$/.test(tokens[3])) {
-            return {valid: false, error_number: 4, error: errors[4]};
-        }
-
-        /* 5th criterion: 3th field is a valid castle-string? */
-        if( !/^(KQ?k?q?|Qk?q?|kq?|q|-)$/.test(tokens[2])) {
-            return {valid: false, error_number: 5, error: errors[5]};
-        }
-
-        /* 6th criterion: 2nd field is "w" (white) or "b" (black)? */
-        if (!/^(w|b)$/.test(tokens[1])) {
-            return {valid: false, error_number: 6, error: errors[6]};
         }
 
         /* 7th criterion: 1st field contains 8 rows? */
         var rows = tokens[0].split('/');
         if (rows.length !== 8) {
-            return {valid: false, error_number: 7, error: errors[7]};
+            return {valid: false, error_number: 4, error: errors[4]};
         }
 
         /* 8th criterion: every row is valid? */
@@ -315,58 +254,53 @@ var Chess = function(fen) {
             for (var k = 0; k < rows[i].length; k++) {
                 if (!isNaN(rows[i][k])) {
                     if (previous_was_number) {
-                        return {valid: false, error_number: 8, error: errors[8]};
+                        return {valid: false, error_number: 5, error: errors[5]};
                     }
                     sum_fields += parseInt(rows[i][k], 10);
                     previous_was_number = true;
                 } else {
                     if (!/^[prnbqkPRNBQK]$/.test(rows[i][k])) {
-                        return {valid: false, error_number: 9, error: errors[9]};
+                        return {valid: false, error_number: 6, error: errors[6]};
                     }
                     sum_fields += 1;
                     previous_was_number = false;
                 }
             }
             if (sum_fields !== 8) {
-                return {valid: false, error_number: 10, error: errors[10]};
+                return {valid: false, error_number: 7, error: errors[7]};
             }
-        }
-
-        if ((tokens[3][1] == '3' && tokens[1] == 'w') ||
-            (tokens[3][1] == '6' && tokens[1] == 'b')) {
-            return {valid: false, error_number: 11, error: errors[11]};
         }
 
         /* everything's okay! */
         return {valid: true, error_number: 0, error: errors[0]};
     }
 
-    function generate_fen() {
+    function generate_nfen() {
         var empty = 0;
-        var fen = '';
+        var nfen = '';
 
         for (var i = SQUARES.a8; i <= SQUARES.h1; i++) {
             if (board[i] == null) {
                 empty++;
             } else {
                 if (empty > 0) {
-                    fen += empty;
+                    nfen += empty;
                     empty = 0;
                 }
                 var color = board[i].color;
                 var piece = board[i].type;
 
-                fen += (color === WHITE) ?
+                nfen += (color === WHITE) ?
                     piece.toUpperCase() : piece.toLowerCase();
             }
 
             if ((i + 1) & 0x88) {
                 if (empty > 0) {
-                    fen += empty;
+                    nfen += empty;
                 }
 
                 if (i !== SQUARES.h1) {
-                    fen += '/';
+                    nfen += '/';
                 }
 
                 empty = 0;
@@ -382,9 +316,8 @@ var Chess = function(fen) {
 
         /* do we have an empty castling flag? */
         cflags = cflags || '-';
-        var epflags = (ep_square === EMPTY) ? '-' : algebraic(ep_square);
 
-        return [fen, turn, cflags, epflags, half_moves, move_number].join(' ');
+        return [nfen, cflags, move_number].join(' ');
     }
 
     function set_header(args) {
@@ -398,17 +331,17 @@ var Chess = function(fen) {
     }
 
     /* called when the initial board setup is changed with put() or remove().
-     * modifies the SetUp and FEN properties of the header object.  if the FEN is
-     * equal to the default position, the SetUp and FEN are deleted
+     * modifies the SetUp and nFEN properties of the header object.  if the nFEN is
+     * equal to the default position, the SetUp and nFEN are deleted
      * the setup is only updated if history.length is zero, ie moves haven't been
      * made.
      */
-    function update_setup(fen) {
+    function update_setup(nfen) {
         if (history.length > 0) return;
 
-        if (fen !== DEFAULT_POSITION) {
+        if (nfen !== DEFAULT_POSITION) {
             header['SetUp'] = '1';
-            header['FEN'] = fen;
+            header['FEN'] = nfen;
         } else {
             delete header['SetUp'];
             delete header['FEN'];
@@ -449,7 +382,7 @@ var Chess = function(fen) {
             kings[piece.color] = sq;
         }
 
-        update_setup(generate_fen());
+        update_setup(generate_nfen());
 
         return true;
     }
@@ -461,7 +394,7 @@ var Chess = function(fen) {
             kings[piece.color] = EMPTY;
         }
 
-        update_setup(generate_fen());
+        update_setup(generate_nfen());
 
         return piece;
     }
@@ -675,6 +608,7 @@ var Chess = function(fen) {
 
     function is_won()
     {
+        console.log(kings);
         return (kings[WHITE] == EMPTY || kings[BLACK] == EMPTY);
     }
 
@@ -1093,12 +1027,12 @@ var Chess = function(fen) {
                 || is_won();
         },
 
-        validate_fen: function(fen) {
-            return validate_fen(fen);
+        validate_nfen: function(fen) {
+            return validate_nfen(fen);
         },
 
-        fen: function() {
-            return generate_fen();
+        nfen: function() {
+            return generate_nfen();
         },
 
         kfpgn: function(options) {

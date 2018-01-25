@@ -7,6 +7,7 @@ Basic implementation idea is the same as 0x88 implementation
 
 from datetime import datetime
 from collections import defaultdict
+import pprint
 
 STARTING_NFEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR KQkq 1"
 
@@ -150,16 +151,19 @@ class Move():
     PROMOTE = "promote"
     KCASTLE = "kcastle"
     QCASTLE = "qcastle"
+    TIME    = "time"
 
-    def __init__(self, from_sq, to_sq, promote=QUEEN, metadata=None):
+    def __init__(self, from_sq, to_sq, metadata=None):
         self.from_sq = from_sq
         self.to_sq = to_sq
-        self._promote = promote
         # contain additional information that might be relevant but is
         # not a part of the move itself. See examples in properties
         self._metadata = defaultdict(lambda: None)
         if metadata:
             self._metadata.update(metadata)
+
+    def __str__(self):
+        return "Move(from {}, to {}, metadata:{}".format(self.from_sq.san, self.to_sq.san, pprint.pformat(dict(self._metadata)))
 
     @property
     def captured(self):
@@ -177,6 +181,10 @@ class Move():
     def is_queenside_castle(self):
         return self._metadata[Move.QCASTLE]
 
+    @property
+    def time(self):
+        return self._metadata[Move.TIME]
+
 
 class KungFuBoard():
     """ A Kung Fu Board is the same board as a chess board, but move
@@ -190,6 +198,7 @@ class KungFuBoard():
         self._pieces         = []
         self._empty          = Piece(EMPTY, EMPTY, None) # single reference to save memory
         self._last_move_time = None
+        self.move_number     = 0
 
         for i in range(0xff):
             self._pieces.append(self._empty)
@@ -234,8 +243,33 @@ class KungFuBoard():
         self._pieces[to_sq.idx]   = piece
         self._pieces[from_sq.idx] = self._empty
         self._last_move_time      = piece.last_move
+        self.move_number          += 1
 
-        return piece.last_move
+        return piece
+
+    @property
+    def fen(self):
+        """ Return the board part of fen (or nfen) notation"""
+        res = ""
+        for r in range(8):
+            rank = 8 - r
+            e_cnt = 0
+            for f in range(8):
+                file = f + 1
+                piece = self.get_piece(Square.FromFileRank(file, rank))
+                if (piece.type == EMPTY):
+                    e_cnt += 1
+                else:
+                    if (e_cnt != 0):
+                        res += str(e_cnt)
+                        e_cnt = 0
+                    res += str(piece)
+
+            if (e_cnt != 0):
+                res += str(e_cnt)
+            if (rank > 1):
+                res += "/"
+        return res
 
     @property
     def last_time(self):
@@ -333,6 +367,8 @@ class KungFuChess():
                     board.put_piece(l.lower(), color, sq)
                     file += 1
 
+        board.move_number = int(move_num)
+
         kfc = KungFuChess(board, move_cd)
         if "K" not in castles:
             kfc._castles[WHITE][KING] = False
@@ -401,14 +437,15 @@ class KungFuChess():
                     oo_sq = o_sq + self.OFFSETS[PAWN][piece.color]  # two moves forward
                     if oo_sq and self._board.get_piece(oo_sq).type == EMPTY:
                         moves.extend(self.create_pawn_moves(sq, oo_sq, piece.color))
-            lo_sq = o_sq + o_sq.LEFT  # capture forward left
-            if lo_sq and self._board.get_piece(lo_sq).color == other(piece.color):
-                self.create_pawn_moves(sq, lo_sq, piece.color,
-                                       extra_flags={Move.CAPTURE: self._board.get_piece(lo_sq).type})
+            lo_sq = o_sq.left  # capture forward left
+            if lo_sq.valid and self._board.get_piece(lo_sq).color == other(piece.color):
+                moves.extend(self.create_pawn_moves(sq, lo_sq, piece.color,
+                                                    extra_flags={Move.CAPTURE: self._board.get_piece(lo_sq).type}))
 
-            ro_sq = o_sq + o_sq.RIGHT  # capture forward right
-            if ro_sq and self._board.get_piece(ro_sq).color == other(piece.color):
-                self.create_pawn_moves(sq, ro_sq, piece.color)
+            ro_sq = o_sq.right  # capture forward right
+            if ro_sq.valid and self._board.get_piece(ro_sq).color == other(piece.color):
+                moves.extend(self.create_pawn_moves(sq, ro_sq, piece.color,
+                                                    extra_flags={Move.CAPTURE: self._board.get_piece(lo_sq).type}))
         else:   # normal piece, excluding castle
             for offset in self.OFFSETS[piece.type]:
                 o_sq = sq + offset
@@ -449,29 +486,27 @@ class KungFuChess():
 
         for move in self.moves(san_from_sq):
             if move.to_sq == to_sq and move.promote == promote:
-                move_time = now() - self._start_time
-                if piece.last_move is not None and self._cd > (move_time - piece.last_move):  # move too early
+                move_time = now()
+                relative_move_time = move_time - self._start_time  # internally we hold relative times
+                if piece.last_move is not None and self._cd > (relative_move_time - piece.last_move):  # move too early
                     return None
                 # TODO: Update history here
 
                 # Do move
-                self._board.move_piece(from_sq, to_sq, move_time)
-
+                self._board.move_piece(from_sq, to_sq, relative_move_time)
                 # Do special moves
                 if move.is_kingside_castle:
                     castle_from = to_sq.right
                     castle_to   = to_sq.left
-                    self._board.move_piece(castle_from, castle_to, move_time)
-                    self._castles[piece.color] = defaultdict(lambda: False)
+                    self._board.move_piece(castle_from, castle_to, relative_move_time)
 
                 if move.is_queenside_castle:
                     castle_from = to_sq.left.left
                     castle_to = to_sq.right
-                    self._board.move_piece(castle_from, castle_to, move_time)
-                    self._castles[piece.color] = defaultdict(lambda: False)
+                    self._board.move_piece(castle_from, castle_to, relative_move_time)
 
                 if move.promote:
-                    self._board.put_piece(move.promote, piece.color, to_sq, move_time)
+                    self._board.put_piece(move.promote, piece.color, to_sq, relative_move_time)
 
                 # Update castles
                 for color in COLORS:
@@ -483,12 +518,44 @@ class KungFuChess():
                         self._castles[color][QUEEN] = False
 
                 # Update king capture
-                if o_piece == KING:
+                if o_piece.type == KING:
                     self._kings[o_piece.color] = Square.O()
 
-                move._metadata["time"] = move_time
+                move._metadata[Move.TIME] = move_time
+
                 return move
 
+    def to_dict(self):
+        """ Return a dictionary representing the game """
+        res = {
+            "cd": self._cd,
+            "history": None, #TODO
+            "nfen": "{} {} {}".format(self._board.fen, self.castles_nfen, self._board.move_number),
+            "times": {}
+        }
+
+        for r in range(8):
+            rank = r + 1
+            for f in range(8):
+                file = f + 1
+                sq = Square.FromFileRank(file, rank)
+                piece = self._board.get_piece(sq)
+                if (piece.last_move):  # only pass non-None times
+                    res["times"][sq.san] = piece.last_move + self._start_time
+
+        return res
+
+    @property
+    def castles_nfen(self):
+        res = "{K}{Q}{k}{q}".format(
+            K="K" if self._castles[WHITE][KING] else "",
+            Q="Q" if self._castles[WHITE][QUEEN] else "",
+            k="k" if self._castles[BLACK][KING] else "",
+            q="q" if self._castles[BLACK][QUEEN] else ""
+        )
+        if not res:
+            res = '-'
+        return res
 
     @property
     def winner(self):
@@ -511,7 +578,7 @@ class KungFuChess():
         if to_sq.rank == self.PAWN_PROMOTE_RANK[color]:
             for piece in [QUEEN, ROOK, BISHOP, KNIGHT]:
                 extra_flags.update({Move.PROMOTE: piece})
-                move = Move(from_sq, to_sq, promote=piece, metadata=extra_flags)
+                move = Move(from_sq, to_sq, metadata=extra_flags)
                 moves.append(move)
         else:
             moves.append(Move(from_sq, to_sq, metadata=extra_flags))
