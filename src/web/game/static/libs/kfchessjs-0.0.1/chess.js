@@ -41,9 +41,7 @@
  * - Remove check/mate tests, and all draws apart of insufficient material
  * - Allow king capture
  */
-var Chess = function(nfen) {
-
-    /* jshint indent: false */
+var Chess = function(nfen, start_time) {
 
     var BLACK = 'b';
     var WHITE = 'w';
@@ -462,6 +460,9 @@ var Chess = function(nfen) {
             if (i & 0x88) { i += 7; continue; }
 
             var piece = board[i];
+            if (piece !== null && piece !== undefined) {
+                console.log(Date.now(), piece.last_move_time, cooldown_time, Date.now() - piece.last_move_time);
+            }
             if (piece == null) {
                 continue;
             }
@@ -679,7 +680,8 @@ var Chess = function(nfen) {
             kings[board[move.to].color] = EMPTY;
         }
         board[move.to] = board[move.from];
-        board[move.to].last_move_time = time;
+        console.log('move', start_time, time);
+        board[move.to].last_move_time = start_time + time;
         board[move.from] = null;
 
         /* if ep capture, remove the captured pawn */
@@ -705,13 +707,13 @@ var Chess = function(nfen) {
                 var castling_to = move.to - 1;
                 var castling_from = move.to + 1;
                 board[castling_to] = board[castling_from];
-                board[castling_to].last_move_time = time;
+                board[castling_to].last_move_time = start_time + time;
                 board[castling_from] = null;
             } else if (move.flags & BITS.QSIDE_CASTLE) {
                 var castling_to = move.to + 1;
                 var castling_from = move.to - 2;
                 board[castling_to] = board[castling_from];
-                board[castling_to].last_move_time = time;
+                board[castling_to].last_move_time = start_time + time;
                 board[castling_from] = null;
             }
 

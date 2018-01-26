@@ -15,6 +15,8 @@ $(window).ready(function() {
 
     var interval = 17; // approx 60 fps
     var cd = 4000;    // testing TODO: Get from server on game start
+    var start_time;
+    var time_offset;
 
     /*
      * Disable the square for given duration.
@@ -28,7 +30,7 @@ $(window).ready(function() {
       var squareEl = $('#board .square-' + sq);
       squareEl.wrapInner("<div class='sq" + sq + "-inner'></div>");
       var innerEl = $('#board .square-' + sq + " > .sq" + sq + "-inner");
-      disableSquareRec(start, Date.now(), duration, innerEl, sq);
+      disableSquareRec(start_time + start, Date.now(), duration, innerEl, sq);
     }
 
     function disableSquareRec(start, expected, total, elem, sq) {
@@ -58,18 +60,20 @@ $(window).ready(function() {
 
     socket.on('sync-cnf', function(sync_desc) {
 
+      var now = Date.now();
       if (sync_desc['result'] == 'fail') { // invalid id or not id
         //TODO: should handle in informative way, shouldn't really happen though
         console.log("failed to sync", sync_desc);
         location.reload();
         return
       }
-
       console.log("received sync");
       console.log(sync_desc);
+      time_offset = now - sync_desc.board.current_time;
+      start_time  = sync_desc.board.start_time + time_offset;
       cd = sync_desc.board.cd;
       var nfen = sync_desc.board.nfen;
-      game = Chess(nfen);
+      game = Chess(nfen, start_time);
       board.position(game.nfen());
 
       for (var [key, value] of Object.entries(sync_desc.board.times)) {
@@ -94,6 +98,7 @@ $(window).ready(function() {
         cd: cd,
         time: move_desc.time
       });
+      console.log(start_time);
       if (move === null)
       {
         console.log("Invalid move received, (not) requesting sync");

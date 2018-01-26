@@ -521,7 +521,7 @@ class KungFuChess():
                 if o_piece.type == KING:
                     self._kings[o_piece.color] = Square.O()
 
-                move._metadata[Move.TIME] = move_time
+                move._metadata[Move.TIME] = relative_move_time
 
                 return move
 
@@ -529,7 +529,9 @@ class KungFuChess():
         """ Return a dictionary representing the game """
         res = {
             "cd": self._cd,
-            "history": None, #TODO
+            "history": None, #TODO,
+            "current_time": now(),
+            "start_time":   self._start_time,
             "nfen": "{} {} {}".format(self._board.fen, self.castles_nfen, self._board.move_number),
             "times": {}
         }
@@ -541,9 +543,27 @@ class KungFuChess():
                 sq = Square.FromFileRank(file, rank)
                 piece = self._board.get_piece(sq)
                 if (piece.last_move):  # only pass non-None times
-                    res["times"][sq.san] = piece.last_move + self._start_time
+                    res["times"][sq.san] = piece.last_move
 
         return res
+
+    def create_pawn_moves(self, from_sq, to_sq, color, extra_flags=None):
+        """ create pawn moves between squares, assuming the move is legal, and returns a list.
+        """
+        moves = []
+
+        if not extra_flags:
+            extra_flags = {}
+
+        if to_sq.rank == self.PAWN_PROMOTE_RANK[color]:
+            for piece in [QUEEN, ROOK, BISHOP, KNIGHT]:
+                extra_flags.update({Move.PROMOTE: piece})
+                move = Move(from_sq, to_sq, metadata=extra_flags)
+                moves.append(move)
+        else:
+            moves.append(Move(from_sq, to_sq, metadata=extra_flags))
+
+        return moves
 
     @property
     def castles_nfen(self):
@@ -565,25 +585,6 @@ class KungFuChess():
         if self._kings[BLACK] == Square.O():
             return WHITE
         return EMPTY
-
-
-    def create_pawn_moves(self, from_sq, to_sq, color, extra_flags=None):
-        """ create pawn moves between squares, assuming the move is legal, and returns a list.
-        """
-        moves = []
-
-        if not extra_flags:
-            extra_flags = {}
-
-        if to_sq.rank == self.PAWN_PROMOTE_RANK[color]:
-            for piece in [QUEEN, ROOK, BISHOP, KNIGHT]:
-                extra_flags.update({Move.PROMOTE: piece})
-                move = Move(from_sq, to_sq, metadata=extra_flags)
-                moves.append(move)
-        else:
-            moves.append(Move(from_sq, to_sq, metadata=extra_flags))
-
-        return moves
 
 
 ########################################################################################################
