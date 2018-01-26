@@ -108,7 +108,6 @@ $(window).ready(function() {
 
       var res = board.position(game.nfen());
       for (var i = 0; i < res.length; i++) {
-        console.log(res[i]);
         disableSquare(res[i].destination, cd, move_desc.time)
       }
       disableSquare(move.to, cd, move_desc.time);
@@ -171,7 +170,9 @@ $(window).ready(function() {
     };
 
     var onMouseoverSquare = function(square, piece) {
-      if (game == undefined || game.game_over() === true) {
+      if ((source in disabledSquares && disabledSquares[source] == true) ||
+          game == undefined ||
+          game.game_over() === true) {
         return;
       }
       // get list of possible moves for this square

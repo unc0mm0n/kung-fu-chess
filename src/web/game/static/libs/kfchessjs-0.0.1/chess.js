@@ -125,7 +125,6 @@ var Chess = function(nfen, start_time) {
     var kings = {w: EMPTY, b: EMPTY};
     var turn = WHITE;
     var castling = {w: 0, b: 0};
-    var ep_square = EMPTY;
     var half_moves = 0;
     var move_number = 1;
     var history = [];
@@ -145,7 +144,6 @@ var Chess = function(nfen, start_time) {
         kings = {w: EMPTY, b: EMPTY};
         turn = WHITE;
         castling = {w: 0, b: 0};
-        ep_square = EMPTY;
         half_moves = 0;
         move_number = 1;
         history = [];
@@ -460,9 +458,6 @@ var Chess = function(nfen, start_time) {
             if (i & 0x88) { i += 7; continue; }
 
             var piece = board[i];
-            if (piece !== null && piece !== undefined) {
-                console.log(Date.now(), piece.last_move_time, cooldown_time, Date.now() - piece.last_move_time);
-            }
             if (piece == null) {
                 continue;
             }
@@ -498,8 +493,6 @@ var Chess = function(nfen, start_time) {
                     if (board[square] != null &&
                         board[square].color === swap_color(piece.color)) {
                         add_move(board, moves, i, square, BITS.CAPTURE);
-                    } else if (square === ep_square) {
-                        add_move(board, moves, i, ep_square, BITS.EP_CAPTURE);
                     }
                 }
             } else {
@@ -663,7 +656,6 @@ var Chess = function(nfen, start_time) {
             move_time : time,
             kings: {b: kings.b, w: kings.w},
             castling: {b: castling.b, w: castling.w},
-            ep_square: ep_square,
             half_moves: half_moves,
             move_number: move_number
         });
@@ -680,7 +672,6 @@ var Chess = function(nfen, start_time) {
             kings[board[move.to].color] = EMPTY;
         }
         board[move.to] = board[move.from];
-        console.log('move', start_time, time);
         board[move.to].last_move_time = start_time + time;
         board[move.from] = null;
 
@@ -743,16 +734,6 @@ var Chess = function(nfen, start_time) {
             }
         }
 
-        /* if big pawn move, update the en passant square */
-        if (move.flags & BITS.BIG_PAWN) {
-            if (turn === 'b') {
-                ep_square = move.to - 16;
-            } else {
-                ep_square = move.to + 16;
-            }
-        } else {
-            ep_square = EMPTY;
-        }
 
         move_number++;
     }
@@ -765,7 +746,6 @@ var Chess = function(nfen, start_time) {
         kings = old.kings;
         color = old.move.color;
         castling = old.castling;
-        ep_square = old.ep_square;
         half_moves = old.half_moves;
         move_number = old.move_number;
         move_time = old.move_time;
@@ -780,16 +760,7 @@ var Chess = function(nfen, start_time) {
 
         if (move.flags & BITS.CAPTURE) {
             board[move.to] = {type: move.captured, color: them};
-        } else if (move.flags & BITS.EP_CAPTURE) {
-            var index;
-            if (us === BLACK) {
-                index = move.to - 16;
-            } else {
-                index = move.to + 16;
-            }
-            board[index] = {type: PAWN, color: them};
         }
-
 
         if (move.flags & (BITS.KSIDE_CASTLE | BITS.QSIDE_CASTLE)) {
             var castling_to, castling_from;
