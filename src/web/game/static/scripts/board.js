@@ -98,7 +98,6 @@ $(window).ready(function() {
         cd: cd,
         time: move_desc.time
       });
-      console.log(start_time);
       if (move === null)
       {
         console.log("Invalid move received, (not) requesting sync");
@@ -170,7 +169,7 @@ $(window).ready(function() {
     };
 
     var onMouseoverSquare = function(square, piece) {
-      if ((source in disabledSquares && disabledSquares[source] == true) ||
+      if ((square in disabledSquares && disabledSquares[square] == true) ||
           game == undefined ||
           game.game_over() === true) {
         return;
