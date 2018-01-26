@@ -9,6 +9,8 @@ $(window).ready(function() {
   var socket = io('/game');
   socket.on('connect', function() {
 
+    var color;
+
     //------------------------------------------------------------------------------
     // timed functions
     //------------------------------------------------------------------------------
@@ -72,6 +74,18 @@ $(window).ready(function() {
       time_offset = now - sync_desc.board.current_time;
       start_time  = sync_desc.board.start_time + time_offset;
       cd = sync_desc.board.cd;
+      color = sync_desc.color;
+      if (color == 'w') {
+        $("#content-title").text("You are playing white.");
+      }
+      else if (color == 'b') {
+        $("#content-title").text("You are playing Black.");
+        board.flip();
+      }
+      else
+      {
+        $("#content-title").text("You are an observer.");
+      }
       var nfen = sync_desc.board.nfen;
       game = Chess(nfen, start_time);
       board.position(game.nfen());
@@ -105,6 +119,11 @@ $(window).ready(function() {
         return;
       }
 
+      if (game.game_over()) {
+        alert("Game over! "+ game.winner() +" wins!");
+        window.location = "/";
+      }
+
       var res = board.position(game.nfen());
       for (var i = 0; i < res.length; i++) {
         disableSquare(res[i].destination, cd, move_desc.time)
@@ -133,7 +152,8 @@ $(window).ready(function() {
       // do not pick up pieces if the game is over
       // or if it's still disabled
       if (game.game_over() === true ||
-          (source in disabledSquares && disabledSquares[source] == true)) {
+          (source in disabledSquares && disabledSquares[source] == true) ||
+          game.get(source).color != color) {
         return false;
       }
     };
@@ -174,6 +194,11 @@ $(window).ready(function() {
           game.game_over() === true) {
         return;
       }
+
+      if (piece === false || piece[0] !== color) {
+        return;
+      }
+
       // get list of possible moves for this square
       var moves = game.moves({
         square: square,
@@ -182,9 +207,6 @@ $(window).ready(function() {
         verbose: true
       });
 
-      if (piece === false) {  // Todo: check piece color as well
-        return;
-      }
       // highlight the square they moused over
       setSquareAvailable(square);
 

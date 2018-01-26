@@ -1,0 +1,1 @@
+from kfchess.game import BLACK, WHITE, EMPTY

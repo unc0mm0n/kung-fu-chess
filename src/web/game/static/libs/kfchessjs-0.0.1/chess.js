@@ -600,9 +600,19 @@ var Chess = function(nfen, start_time) {
         return move.replace(/=/,'').replace(/[+#]?[?!]*$/,'');
     }
 
+    function winner() {
+        if (kings[WHITE] == EMPTY) {
+            return BLACK;
+        }
+        else if (kings[BLACK] == EMPTY) {
+            return WHITE;
+        }
+        return undefined;
+    }
+
     function is_won()
     {
-        return (kings[WHITE] == EMPTY || kings[BLACK] == EMPTY);
+        return winner() != undefined;
     }
 
     function in_draw()
@@ -994,6 +1004,10 @@ var Chess = function(nfen, start_time) {
 
         in_draw: function() {
             return in_draw();
+        },
+
+        winner: function(){
+            return winner();
         },
 
         game_over: function() {

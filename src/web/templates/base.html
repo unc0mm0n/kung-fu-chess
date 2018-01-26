@@ -10,12 +10,13 @@
 </head>
 <body>
     {# header #}
-    <h1>{{self.title()}}</h1>
+    <h1 id="header-title">{{self.title()}}</h1>
     <ul id="navigation">
     </ul>
 
     {# content #}
     {% block page_content %}
+        <h1 id="content-title">{{self.title()}}</h1>
         Welcome to KFChess
     {% endblock page_content %}
 

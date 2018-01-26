@@ -586,6 +586,10 @@ class KungFuChess():
             return WHITE
         return EMPTY
 
+    @property
+    def is_over(self):
+        return self.winner != EMPTY
+
 
 ########################################################################################################
 # Utility functions                                                                                    #

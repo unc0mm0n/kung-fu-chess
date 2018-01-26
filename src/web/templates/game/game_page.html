@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 
 {% block title %}
-You are watching game {{ game_id }}!
+Game {{game_id}}
 {% endblock %}
 
 {% block page_headers %}
@@ -14,7 +14,7 @@ You are watching game {{ game_id }}!
 {% endblock page_headers %}
 
 {% block page_content %}
-
+<h2 id="content-title"></h2>
 <div id="board" style="width:400px"></div>
 
 {% endblock page_content %}
