@@ -5,60 +5,30 @@ Event handler for game Blueprint, handles socket.io events connecting the server
 from flask_socketio import emit, join_room, rooms
 from flask import request
 
+from web.game import get_store_key, get_game_redis, push_req
+from web.game.queue_reader import FAIL
 from web import socketio
-from web.game import manager
-import kfchess
-
-SUCCESS = 'success'
-FAIL    = 'fail'
 
 @socketio.on('move-req', namespace='/game')
 def handle_game_move(game_id, move_json):
     """ ask to play a move """
-    if game_id not in rooms():
+    game_store = get_game_store(game_id)
+    if game_id not in rooms() or not get_game_redis().exists(game_store):
         # room id mismatch
         emit('move-cnf', {'result': FAIL, 'reason': 'invalid game_id'})  # send only to requester
         return
 
-    move = manager.move_game(game_id, move_json, request.sid)  #TODO: Add users layer somewhere..
-    if not move:
-        emit('move-cnf', {'result': FAIL, 'reason': 'illegal move'})  # send only to requester
-        return
+    push_req('move-req', move_json, game_id)
 
-    if manager.game_over(game_id):
-        manager.delete(game_id)
-
-    emit('move-cnf',
-         {'result': SUCCESS, 'from': move.from_sq.san, 'to': move.to_sq.san, 'promotion': move.promote, 'time': move.time},
-         room=game_id,
-         namespace="/game")
 
 @socketio.on('sync-req', namespace='/game')
 def handle_sync_req(game_id):
     """ ask to be synced about the state of the game """
-    if game_id not in manager:  # TODO: more recoveries here (maybe game should be loaded from db)
+    game_store = get_store_key(game_id)
+    if not get_game_redis().exists(game_store):  # TODO: more recoveries here (maybe game should be loaded from sql db)
         emit('sync-cnf', {'result': FAIL, 'reason': 'Unknown game id {}.'.format(game_id)})
         return
 
     join_room(game_id)
-    res = {'result': SUCCESS, 'board': manager.build_game_dict(game_id)}
 
-    # tmp - check if any player is available and set it to syncing player
-    meta = manager.get_meta(game_id)
-    if meta[kfchess.WHITE] is None:
-        manager.set_player(game_id, kfchess.WHITE, request.sid)
-    elif meta[kfchess.BLACK] is None:
-        manager.set_player(game_id, kfchess.BLACK, request.sid)
-    # end tmp
-
-    meta = manager.get_meta(game_id)
-    # check player color in game
-    if meta[kfchess.WHITE] == request.sid:
-        res['color'] = kfchess.WHITE
-    elif meta[kfchess.BLACK] == request.sid:
-        res['color'] = kfchess.BLACK
-    else:
-        res['color'] = kfchess.EMPTY
-
-    emit('sync-cnf', res)
-    return
+    push_req("sync-req", None, game_id);

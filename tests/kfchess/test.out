@@ -1,0 +1,114 @@
+============================= test session starts ==============================
+platform linux -- Python 3.6.3, pytest-3.3.2, py-1.5.2, pluggy-0.6.0
+rootdir: /app/kung-fu-chess, inifile:
+collected 31 items
+
+test_game.py ..................                                          [ 58%]
+test_game_redis.py F............                                         [100%]
+
+=================================== FAILURES ===================================
+________________________________ test_FromNfen _________________________________
+
+    def test_FromNfen():
+>       kfc = KungFuChess.FromNfen(0, **get_nfen_args(60))
+
+test_game_redis.py:19: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../../src/kfchess/game.py:455: in FromNfen
+    kfc = KungFuChess(board, move_cd)
+../../src/kfchess/game.py:489: in __init__
+    timed_moves = list([piece.last_move for piece in self._board if piece.last_move is not None])
+../../src/kfchess/game.py:489: in <listcomp>
+    timed_moves = list([piece.last_move for piece in self._board if piece.last_move is not None])
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <kfchess.game.RedisKungFuBoard object at 0x7f12dcc6ab70>, sq = 8
+
+    def __getitem__(self, sq : Square) -> Piece:
+        """ Get piece from square. """
+        if self._exp:
+            self._db.expire(self._store_key, self._exp)
+        try:
+            san = sq.san
+        except AttributeError:  # maybe int index
+            san = Square(sq).san
+        res = self._db.hget(self._store_key, san)
+        if res is None:
+>           raise ValueError("invalid sq {}".format(sq))
+E           ValueError: invalid sq 8
+
+../../src/kfchess/game.py:364: ValueError
+----------------------------- Captured stdout call -----------------------------
+b'{"type": "r", "color": "b", "last_move": null}'
+b'{"type": "n", "color": "b", "last_move": null}'
+b'{"type": "b", "color": "b", "last_move": null}'
+b'{"type": "q", "color": "b", "last_move": null}'
+b'{"type": "k", "color": "b", "last_move": null}'
+b'{"type": "b", "color": "b", "last_move": null}'
+b'{"type": "n", "color": "b", "last_move": null}'
+b'{"type": "r", "color": "b", "last_move": null}'
+b'{"type": "p", "color": "b", "last_move": null}'
+b'{"type": "p", "color": "b", "last_move": null}'
+b'{"type": "p", "color": "b", "last_move": null}'
+b'{"type": "p", "color": "b", "last_move": null}'
+b'{"type": "p", "color": "b", "last_move": null}'
+b'{"type": "p", "color": "b", "last_move": null}'
+b'{"type": "p", "color": "b", "last_move": null}'
+b'{"type": "p", "color": "b", "last_move": null}'
+b'{"type": ".", "color": ".", "last_move": null}'
+b'{"type": ".", "color": ".", "last_move": null}'
+b'{"type": ".", "color": ".", "last_move": null}'
+b'{"type": ".", "color": ".", "last_move": null}'
+b'{"type": ".", "color": ".", "last_move": null}'
+b'{"type": ".", "color": ".", "last_move": null}'
+b'{"type": ".", "color": ".", "last_move": null}'
+b'{"type": ".", "color": ".", "last_move": null}'
+b'{"type": ".", "color": ".", "last_move": null}'
+b'{"type": ".", "color": ".", "last_move": null}'
+b'{"type": ".", "color": ".", "last_move": null}'
+b'{"type": ".", "color": ".", "last_move": null}'
+b'{"type": ".", "color": ".", "last_move": null}'
+b'{"type": ".", "color": ".", "last_move": null}'
+b'{"type": ".", "color": ".", "last_move": null}'
+b'{"type": ".", "color": ".", "last_move": null}'
+b'{"type": ".", "color": ".", "last_move": null}'
+b'{"type": ".", "color": ".", "last_move": null}'
+b'{"type": ".", "color": ".", "last_move": null}'
+b'{"type": ".", "color": ".", "last_move": null}'
+b'{"type": ".", "color": ".", "last_move": null}'
+b'{"type": ".", "color": ".", "last_move": null}'
+b'{"type": ".", "color": ".", "last_move": null}'
+b'{"type": ".", "color": ".", "last_move": null}'
+b'{"type": ".", "color": ".", "last_move": null}'
+b'{"type": ".", "color": ".", "last_move": null}'
+b'{"type": ".", "color": ".", "last_move": null}'
+b'{"type": ".", "color": ".", "last_move": null}'
+b'{"type": ".", "color": ".", "last_move": null}'
+b'{"type": ".", "color": ".", "last_move": null}'
+b'{"type": ".", "color": ".", "last_move": null}'
+b'{"type": ".", "color": ".", "last_move": null}'
+b'{"type": "p", "color": "w", "last_move": null}'
+b'{"type": "p", "color": "w", "last_move": null}'
+b'{"type": "p", "color": "w", "last_move": null}'
+b'{"type": "p", "color": "w", "last_move": null}'
+b'{"type": "p", "color": "w", "last_move": null}'
+b'{"type": "p", "color": "w", "last_move": null}'
+b'{"type": "p", "color": "w", "last_move": null}'
+b'{"type": "p", "color": "w", "last_move": null}'
+b'{"type": "r", "color": "w", "last_move": null}'
+b'{"type": "n", "color": "w", "last_move": null}'
+b'{"type": "b", "color": "w", "last_move": null}'
+b'{"type": "q", "color": "w", "last_move": null}'
+b'{"type": "k", "color": "w", "last_move": null}'
+b'{"type": "b", "color": "w", "last_move": null}'
+b'{"type": "n", "color": "w", "last_move": null}'
+b'{"type": "r", "color": "w", "last_move": null}'
+b'{"type": "r", "color": "w", "last_move": null}'
+b'{"type": "n", "color": "w", "last_move": null}'
+b'{"type": "b", "color": "w", "last_move": null}'
+b'{"type": "q", "color": "w", "last_move": null}'
+b'{"type": "k", "color": "w", "last_move": null}'
+b'{"type": "b", "color": "w", "last_move": null}'
+b'{"type": "n", "color": "w", "last_move": null}'
+b'{"type": "r", "color": "w", "last_move": null}'
+===================== 1 failed, 30 passed in 4.28 seconds ======================

@@ -8,6 +8,7 @@ Basic implementation idea is the same as 0x88 implementation
 from datetime import datetime
 from collections import defaultdict
 import pprint
+import json
 
 STARTING_NFEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR KQkq 1"
 
@@ -40,6 +41,13 @@ class Piece():
 
     def __str__(self):
         return self.san
+
+    def dict(self):
+        return {
+                'type': self.type,
+                'color': self.color,
+                'last_move': self.last_move
+                }
 
     @property
     def san(self):
@@ -186,46 +194,163 @@ class Move():
         return self._metadata[Move.TIME]
 
 
+# Offsets for each piece (same as standard chess)
+OFFSETS = {
+    KING    : [Square.O().up.left, Square.O().up, Square.O().up.right, Square.O().left,
+               Square.O().right, Square.O().down.left, Square.O().down, Square.O().down.right],
+    QUEEN   : [Square.O().up.left, Square.O().up, Square.O().up.right, Square.O().left,
+               Square.O().right, Square.O().down.left, Square.O().down, Square.O().down.right],
+    ROOK    : [Square.O().up, Square.O().down, Square.O().left, Square.O().right],
+    KNIGHT  : [Square.O().up.up.left, Square.O().up.up.right, Square.O().up.right.right, Square.O().up.left.left,
+               Square.O().down.right.right, Square.O().down.left.left, Square.O().down.down.right, Square.O().down.down.left],
+    BISHOP  : [Square.O().up.left, Square.O().down.left, Square.O().up.right, Square.O().down.right],
+    PAWN    : {WHITE: Square.O().up, BLACK: Square.O().down} # pawns handled separately
+}
+
+# Sliding ability for each piece (same as standard chess)
+SLIDE = {
+    KING   : False,
+    QUEEN  : True,
+    ROOK   : True,
+    KNIGHT : False,
+    BISHOP : True,
+    PAWN   : False  # pawns handled separately
+}
+
+PAWN_START_RANK = {
+    WHITE: 2,
+    BLACK: 7
+}
+
+PAWN_PROMOTE_RANK = {
+    WHITE: 8,
+    BLACK: 1
+}
+
+CASTLE_DISABLING_SQUARES = { # Moves from or to these squares will disable the respective castle
+    WHITE: {
+        KING: [Square.FromSan('e1'), Square.FromSan('h1')],
+        QUEEN: [Square.FromSan('e1'), Square.FromSan('a1')]
+    },
+    BLACK: {
+        KING: [Square.FromSan('e8'), Square.FromSan('h8')],
+        QUEEN: [Square.FromSan('e8'), Square.FromSan('a8')]
+    }
+}
+
 class KungFuBoard():
     """ A Kung Fu Board is the same board as a chess board, but move
     numbers are tracked for half-moves instead of full moves, and
     timestamps of the game start and last move of each piece are also
-    recorded """
+    recorded. DEPRECATED."""
 
-    def __init__(self):
-        """ Initialize an empty board. """
 
-        self._pieces         = []
-        self._empty          = Piece(EMPTY, EMPTY, None) # single reference to save memory
+
+
+class RedisKungFuBoard(KungFuBoard):
+    """ A Kung Fu Board implementation storing using Redis instead of an
+    internal list. Should check performence differences"""
+
+    def __init__(self, redis_db, store_key, cd=None, exp=None):
+        """ Initialize a new RedisKungFuBoard at given redis_db and store.
+
+        the expire of the game (from last set or get) will be set to exp milliseconds if it is not none.
+        cd if not specified will be taken from db, """
+        self._db        = redis_db
+        self._store_key = store_key
+        self._exp       = None
+        if exp:
+            self._set("exp", exp)
+            self._exp       = exp
+        else:
+            self._exp = self._get("exp")
+        self._pexpire()
+
+        if cd is not None:
+            self._cd = cd
+            self._set("cd", cd)
+        else:
+            self._cd = self._get("cd")
+        super().__init__()
+
+    def clear(self):
+        """ Create new, empty, board. called by __init__ """
+        for i in range(8):
+            for j in range(8):
+                sq = Square.FromFileRank(i+1, j+1)
+                self[sq] = Piece(EMPTY, EMPTY, None)
+
         self._last_move_time = None
         self.move_number     = 0
 
-        for i in range(0xff):
-            self._pieces.append(self._empty)
-
-    def __getitem__(self, sq):
+    def __getitem__(self, sq : Square) -> Piece:
+        """ Get piece from square. """
+        if self._exp:
+            self._db.pexpire(self._store_key, self._exp)
         try:
-            return self._pieces[sq.idx]
-        except AttributeError:  # try int
-            return self._pieces[sq]
+            san = sq.san
+        except AttributeError:  # maybe int index
+            san = Square(sq).san
+        res = self._db.hget(self._store_key, san)
+        if res is None:
+            raise ValueError("invalid sq {}".format(sq))
+        return Piece(**json.loads(res))
+
+    def _pexpire(self):
+        if self._exp:
+            self._db.pexpire(self._store_key, self._exp)
+
+    def _get(self, key):
+        """ Get a non-square key """
+        self._pexpire()
+        return json.loads(self._db.hget(self._store_key, key))
+
+    def _set(self, key, value):
+        """ put a value in a non-square key"""
+        self._pexpire()
+        self._db.hset(self._store_key, key, json.dumps(value))
+
+    def __setitem__(self, sq: Square, piece: Piece):
+        """ Overwriting this should suffice in changing store method. """
+        try:
+            t_piece = self[sq]
+        except ValueError:
+            t_piece = Piece(EMPTY, EMPTY, None)
+
+        # set expire
+        self._pexpire()
+
+        # if we removed a king
+        if t_piece.type == KING:
+            king_key = "kings:{}".format(t_piece.color)
+            self._set(king_key, None)
+
+        # remember new piece
+        self._db.hset(self._store_key, sq.san, json.dumps(piece.dict()))
+
+        # if we put a king
+        if piece.type == KING:
+            old = self.kings
+            king_key = "kings:{}".format(piece.color)
+            king_sq =  self._get(king_key)
+            if king_sq:
+                raise ValueError("Too many kings of same color")
+            self._set(king_key, json.dumps(sq.san))
+
 
     def put_piece(self, type, color, to_sq, time=None):
         """ Create a new piece of given type and color and put in to to_sq, deleting the piece in to_sq
 
         The last_move of the piece will be set to time. Can be used with type=EMPTY to remove pieces.
         Return the new Piece."""
-        if type == EMPTY:
-            self._pieces[to_sq.idx] = self._empty
-            return
-
         piece = Piece(type, color, time)
-        self._pieces[to_sq.idx]   = piece
+        self[to_sq]   = piece
         return piece
 
     def get_piece(self, from_sq):
         """ Return the piece at given square."""
 
-        return self._pieces[from_sq.idx]
+        return self[from_sq]
 
 
     def move_piece(self, from_sq, to_sq, new_time):
@@ -233,19 +358,99 @@ class KungFuBoard():
 
         This will delete any piece at to_sq.
 
-        Return the recorded move timestamp or none if the move wasn't made. """
+        Return moved piece or None of from_sq was empty """
 
-        piece = self._pieces[from_sq.idx]
+        piece = self[from_sq]
         if piece.type == EMPTY:
             return None
 
         piece.last_move           = new_time
-        self._pieces[to_sq.idx]   = piece
-        self._pieces[from_sq.idx] = self._empty
-        self._last_move_time      = piece.last_move
-        self.move_number          += 1
-
+        self[from_sq]             = Piece(EMPTY, EMPTY, None)
+        self[to_sq]               = piece
+        self.set_last_move(piece.last_move)
+        self.inc_move_number()
         return piece
+
+    def set_start_time(self, time):
+        self._set("start_time", time)
+
+    def set_castles(self, castles):
+        self._set("castles", castles)
+
+    def set_move_number(self, move):
+        self._set("move_number", move)
+
+    def inc_move_number(self):
+        self._db.hincrby(self._store_key, "move_number", 1)
+
+    def set_last_move(self, time):
+        self._set("last_move", time)
+        self._last_move_time = time
+
+    def can_castle(self, color, side):
+        letter = 'k' if side == KING else 'q'
+        fen_letter = letter.upper() if color == WHITE else letter
+        return fen_letter in str(self.castles)
+
+    def disable_castle(self, color, side):
+        letter = 'k' if side == KING else 'q'
+        fen_letter = letter.upper() if color == WHITE else letter
+        current = self.castles
+        self.set_castles(str(current).replace(fen_letter, ""))
+
+    def get_all_pieces(self, type=None, color=None, move_before=None, move_after=None):
+        """ Get a tuple (sq, piece) of all pieces.
+
+        limited to type/color/move_before/move_after (where move times are relative to game start).
+        setting move_after 0 will get all pieces that ever moved. """
+        res = []
+        for r in range(8):
+            rank = 8-r
+            for f in range(8):
+                file = f + 1
+                sq = Square.FromFileRank(file, rank)
+                piece = self[sq]
+                if (type is None or piece.type == type)\
+                    and (color is None or piece.color == color)\
+                    and (move_before is None or piece.last_move is None or piece.last_move < move_before)\
+                    and (move_after is None or (piece.last_move is not None and piece.last_move > move_after)):
+                    res.append((sq, piece))
+        return res
+
+    @property
+    def winner(self):
+        kings = self.kings
+        if kings[WHITE] == None:
+            return BLACK
+        elif kings[BLACK] == None:
+            return WHITE
+        else:
+            return None
+
+    @property
+    def start_time(self):
+        res = self._get("start_time")
+        return res
+
+    @property
+    def cd(self):
+        return self._cd
+
+    @property
+    def kings(self):
+        w_key = "kings:{}".format(WHITE)
+        b_key = "kings:{}".format(BLACK)
+        try:
+            w_king = self._get(w_key)
+        except TypeError:
+            self._set(w_key, None)
+            w_king = None
+        try:
+            b_king = self._get(b_key)
+        except TypeError:
+            self._set(b_key, None)
+            b_king = None
+        return {WHITE: w_king, BLACK: b_king}
 
     @property
     def fen(self):
@@ -287,309 +492,219 @@ class KungFuBoard():
             res += "\n"
         return res
 
-
-class KungFuChess():
-    # Offsets specific to KungFuChess for each piece (same as standard chess)
-    OFFSETS = {
-        KING    : [Square.O().up.left, Square.O().up, Square.O().up.right, Square.O().left,
-                   Square.O().right, Square.O().down.left, Square.O().down, Square.O().down.right],
-        QUEEN   : [Square.O().up.left, Square.O().up, Square.O().up.right, Square.O().left,
-                   Square.O().right, Square.O().down.left, Square.O().down, Square.O().down.right],
-        ROOK    : [Square.O().up, Square.O().down, Square.O().left, Square.O().right],
-        KNIGHT  : [Square.O().up.up.left, Square.O().up.up.right, Square.O().up.right.right, Square.O().up.left.left,
-                   Square.O().down.right.right, Square.O().down.left.left, Square.O().down.down.right, Square.O().down.down.left],
-        BISHOP  : [Square.O().up.left, Square.O().down.left, Square.O().up.right, Square.O().down.right],
-        PAWN    : {WHITE: Square.O().up, BLACK: Square.O().down} # pawns handled separately
-    }
-
-    # Sliding ability specific to KungFuChess for each piece (same as standard chess)
-    SLIDE = {
-        KING   : False,
-        QUEEN  : True,
-        ROOK   : True,
-        KNIGHT : False,
-        BISHOP : True,
-        PAWN   : False  # pawns handled separately
-    }
-
-    PAWN_START_RANK = {
-        WHITE: 2,
-        BLACK: 7
-    }
-
-    PAWN_PROMOTE_RANK = {
-        WHITE: 8,
-        BLACK: 1
-    }
-
-    CASTLE_DISABLING_SQUARES = { # Moves from or to these squares will disable the respective castle
-        WHITE: {
-            KING: [Square.FromSan('e1'), Square.FromSan('h1')],
-            QUEEN: [Square.FromSan('e1'), Square.FromSan('a1')]
-        },
-        BLACK: {
-            KING: [Square.FromSan('e8'), Square.FromSan('h8')],
-            QUEEN: [Square.FromSan('e8'), Square.FromSan('a8')]
-        }
-    }
-
-    @classmethod
-    def FromNfen(cls, move_cd, nfen=None):
-        """ Initialize a new board from given nFEN.
-
-        nFEN, or not FEN, is based on the official FEN but without the 2nd, 4th and 5th parts,
-        and where the move number is in half moves.
-        For FEN notation see https://en.wikipedia.org/wiki/Forsyth%E2%80%93Edwards_Notation.
-        nFEN is not complete, not containing the last move timestamp of each piece and current time
-        """
-        if not nfen:
-            nfen = STARTING_NFEN
-
-        board = KungFuBoard()
-
-        rows, castles, move_num = nfen.split(" ")
-
-        for (rank, row) in enumerate(rows.split("/")):
-            file = 0
-            for l in row:
-                sq = Square.FromFileRank(file + 1, 8 - rank )  # FEN ranks go from top to bottom
-                try:
-                    spaces = int(l)
-                    for _ in range(spaces):
-                        sq = Square.FromFileRank(file + 1, 8 - rank)
-                        board.put_piece(EMPTY, EMPTY, sq)
-                        file += 1
-                except ValueError:  # not an integer, then
-                    if l.isupper():
-                        color = WHITE
-                    else:
-                        color = BLACK
-                    board.put_piece(l.lower(), color, sq)
-                    file += 1
-
-        board.move_number = int(move_num)
-
-        kfc = KungFuChess(board, move_cd)
-        if "K" not in castles:
-            kfc._castles[WHITE][KING] = False
-        if "Q" not in castles:
-            kfc._castles[WHITE][QUEEN] = False
-        if "k" not in castles:
-            kfc._castles[BLACK][KING] = False
-        if "q" not in castles:
-            kfc._castles[BLACK][QUEEN] = False
-
-        return kfc
-
-
-    def __init__(self, board, move_cd, time_since=0):
-        """ Initialize a new game on given board requiring move_cd between moves of the same piece.
-        by default, the last_move time of the board is used as reference time (meaning the last piece
-         to move is always locked on start), but if time_since is supplied it will be added to that time. """
-
-        self._board = board
-
-        kings = list([(sq, piece) for sq, piece in enumerate(self._board) if piece.type == KING])
-        if len(kings) != 2 and len(kings) != 1:
-            raise ValueError("Invalid board given, should have 1 or 2 kings")
-
-        self._kings = {
-            BLACK: Square.O(),
-            WHITE: Square.O()
-        }
-        for sq, king in kings:
-            if (self._kings[king.color] != Square.O()):
-                raise ValueError("Invalid board given, two kings of same color")
-            self._kings[king.color] = Square(sq)
-
-
-        timed_moves = list([piece.last_move for piece in self._board if piece.last_move is not None])
-        if not timed_moves:
-            board_latest = 0
-        else:
-            board_latest = max(timed_moves)
-        self._start_time = now() - board_latest + time_since
-
-        self._cd = move_cd
-        self._castles = {  # TODO figure out castling
-            WHITE: {KING: True, QUEEN: True},
-            BLACK: {KING: True, QUEEN: True}
-        }
-
-    def moves(self, san_sq):
-        """ Return a list of all possible moves from san_sq """
-        try:
-            sq = Square.FromSan(san_sq)
-        except ValueError:
-            return []  # illegal square, no moves
-
-        piece = self._board.get_piece(sq)
-        moves = []
-
-        # The ugly part...
-        if piece.type == EMPTY:
-            return []
-        if piece.type == PAWN:
-            o_sq = sq + self.OFFSETS[PAWN][piece.color]  # one move forward
-            if o_sq and self._board.get_piece(o_sq).type == EMPTY:
-                moves.extend(self.create_pawn_moves(sq, o_sq, piece.color))
-                if (sq.rank == self.PAWN_START_RANK[piece.color]):  # if on starting rank
-                    oo_sq = o_sq + self.OFFSETS[PAWN][piece.color]  # two moves forward
-                    if oo_sq and self._board.get_piece(oo_sq).type == EMPTY:
-                        moves.extend(self.create_pawn_moves(sq, oo_sq, piece.color))
-            lo_sq = o_sq.left  # capture forward left
-            if lo_sq.valid and self._board.get_piece(lo_sq).color == other(piece.color):
-                moves.extend(self.create_pawn_moves(sq, lo_sq, piece.color,
-                                                    extra_flags={Move.CAPTURE: self._board.get_piece(lo_sq).type}))
-
-            ro_sq = o_sq.right  # capture forward right
-            if ro_sq.valid and self._board.get_piece(ro_sq).color == other(piece.color):
-                moves.extend(self.create_pawn_moves(sq, ro_sq, piece.color,
-                                                    extra_flags={Move.CAPTURE: self._board.get_piece(lo_sq).type}))
-        else:   # normal piece, excluding castle
-            for offset in self.OFFSETS[piece.type]:
-                o_sq = sq + offset
-                while o_sq.valid:
-                    o_piece = self._board.get_piece(o_sq)
-                    if o_piece.type == EMPTY:
-                        moves.append(Move(sq, o_sq))
-                    else:
-                        if o_piece.color == other(piece.color):
-                            moves.append(Move(sq, o_sq,
-                                              metadata={Move.CAPTURE: o_piece.type}))
-                        break
-                    if not self.SLIDE[piece.type]:
-                        break
-                    o_sq = o_sq + offset
-
-        # castle
-        if piece.type == KING:
-            if self._castles[piece.color][KING]:
-                moves.append(Move(sq, sq.right.right,
-                                  metadata={Move.KCASTLE: True}))
-            if self._castles[piece.color][QUEEN]:
-                moves.append(Move(sq, sq.left.left,
-                                  metadata={Move.QCASTLE: True}))
-
-        return moves
-
-    def move(self, san_from_sq, san_to_sq, promote=None):
-        """ Make a move from san_from_sq to san_to_sq, Return the move if it was made, or None otherwise. """
-        from_sq = Square.FromSan(san_from_sq)
-        to_sq = Square.FromSan(san_to_sq)
-
-        if not from_sq.valid or not to_sq.valid:
-            return None
-
-        piece = self._board[from_sq]
-        o_piece = self._board[to_sq]
-
-        for move in self.moves(san_from_sq):
-            if move.to_sq == to_sq and move.promote == promote:
-                move_time = now()
-                relative_move_time = move_time - self._start_time  # internally we hold relative times
-                if piece.last_move is not None and self._cd > (relative_move_time - piece.last_move):  # move too early
-                    return None
-                # TODO: Update history here
-
-                # Do move
-                self._board.move_piece(from_sq, to_sq, relative_move_time)
-                # Do special moves
-                if move.is_kingside_castle:
-                    castle_from = to_sq.right
-                    castle_to   = to_sq.left
-                    self._board.move_piece(castle_from, castle_to, relative_move_time)
-
-                if move.is_queenside_castle:
-                    castle_from = to_sq.left.left
-                    castle_to = to_sq.right
-                    self._board.move_piece(castle_from, castle_to, relative_move_time)
-
-                if move.promote:
-                    self._board.put_piece(move.promote, piece.color, to_sq, relative_move_time)
-
-                # Update castles
-                for color in COLORS:
-                    king_sqs  = self.CASTLE_DISABLING_SQUARES[color][KING]
-                    queen_sqs = self.CASTLE_DISABLING_SQUARES[color][QUEEN]
-                    if from_sq in king_sqs or to_sq in king_sqs:
-                        self._castles[color][KING] = False
-                    if from_sq in queen_sqs or to_sq in queen_sqs:
-                        self._castles[color][QUEEN] = False
-
-                # Update king capture
-                if o_piece.type == KING:
-                    self._kings[o_piece.color] = Square.O()
-
-                move._metadata[Move.TIME] = relative_move_time
-
-                return move
-
-    def to_dict(self):
-        """ Return a dictionary representing the game """
-        res = {
-            "cd": self._cd,
-            "history": None, #TODO,
-            "current_time": now(),
-            "start_time":   self._start_time,
-            "nfen": "{} {} {}".format(self._board.fen, self.castles_nfen, self._board.move_number),
-            "times": {}
-        }
-
-        for r in range(8):
-            rank = r + 1
-            for f in range(8):
-                file = f + 1
-                sq = Square.FromFileRank(file, rank)
-                piece = self._board.get_piece(sq)
-                if (piece.last_move):  # only pass non-None times
-                    res["times"][sq.san] = piece.last_move
-
-        return res
-
-    def create_pawn_moves(self, from_sq, to_sq, color, extra_flags=None):
-        """ create pawn moves between squares, assuming the move is legal, and returns a list.
-        """
-        moves = []
-
-        if not extra_flags:
-            extra_flags = {}
-
-        if to_sq.rank == self.PAWN_PROMOTE_RANK[color]:
-            for piece in [QUEEN, ROOK, BISHOP, KNIGHT]:
-                extra_flags.update({Move.PROMOTE: piece})
-                move = Move(from_sq, to_sq, metadata=extra_flags)
-                moves.append(move)
-        else:
-            moves.append(Move(from_sq, to_sq, metadata=extra_flags))
-
-        return moves
-
     @property
-    def castles_nfen(self):
-        res = "{K}{Q}{k}{q}".format(
-            K="K" if self._castles[WHITE][KING] else "",
-            Q="Q" if self._castles[WHITE][QUEEN] else "",
-            k="k" if self._castles[BLACK][KING] else "",
-            q="q" if self._castles[BLACK][QUEEN] else ""
-        )
-        if not res:
-            res = '-'
-        return res
+    def castles(self):
+        return self._get("castles")
 
-    @property
-    def winner(self):
-        """ Return color of winner if game is over, or EMPTY if there is no winner yet. """
-        if self._kings[WHITE] == Square.O():
-            return BLACK
-        if self._kings[BLACK] == Square.O():
-            return WHITE
-        return EMPTY
+@property
+def game_winner(db, store_key):
+    """ Return color of winner if game is over, or EMPTY if there is no winner yet. """
+    board = RedisKungFuBoard(db, store_key)
+    if board.kings[WHITE] == Square.O():
+        return BLACK
+    if self._kings[BLACK] == Square.O():
+        return WHITE
+    return EMPTY
 
-    @property
-    def is_over(self):
-        return self.winner != EMPTY
+@property
+def is_over(self):
+    return self.winner != EMPTY
 
+
+
+def moves(db, store_key, san_sq):
+    """ Return a list of all possible moves from san_sq """
+    try:
+        sq = Square.FromSan(san_sq)
+    except ValueError:
+        return []  # illegal square, no moves
+
+    board = RedisKungFuBoard(db, store_key)
+    piece = board.get_piece(sq)
+    moves = []
+
+    # The ugly part...
+    if piece.type == EMPTY:
+        return []
+    if piece.type == PAWN:
+        o_sq = sq + OFFSETS[PAWN][piece.color]  # one move forward
+        if o_sq and board[o_sq].type == EMPTY:
+            moves.extend(create_pawn_moves(sq, o_sq, piece.color))
+            if (sq.rank == PAWN_START_RANK[piece.color]):  # if on starting rank
+                oo_sq = o_sq + OFFSETS[PAWN][piece.color]  # two moves forward
+                if oo_sq and board[oo_sq].type == EMPTY:
+                    moves.extend(create_pawn_moves(sq, oo_sq, piece.color))
+        lo_sq = o_sq.left  # capture forward left
+        if lo_sq.valid and board[lo_sq].color == other(piece.color):
+            moves.extend(create_pawn_moves(sq, lo_sq, piece.color,
+                                           extra_flags={Move.CAPTURE: board[lo_sq].type}))
+
+        ro_sq = o_sq.right  # capture forward right
+        if ro_sq.valid and board[ro_sq].color == other(piece.color):
+            moves.extend(create_pawn_moves(sq, ro_sq, piece.color,
+                                            extra_flags={Move.CAPTURE: board[lo_sq].type}))
+    else:   # normal piece, excluding castle
+        for offset in OFFSETS[piece.type]:
+            o_sq = sq + offset
+            while o_sq.valid:
+                o_piece = board[o_sq]
+                if o_piece.type == EMPTY:
+                    moves.append(Move(sq, o_sq))
+                else:
+                    if o_piece.color == other(piece.color):
+                        moves.append(Move(sq, o_sq,
+                                          metadata={Move.CAPTURE: o_piece.type}))
+                    break
+                if not SLIDE[piece.type]:
+                    break
+                o_sq = o_sq + offset
+
+    # castle
+    if piece.type == KING:
+        if board.can_castle(piece.color, KING):
+            moves.append(Move(sq, sq.right.right,
+                              metadata={Move.KCASTLE: True}))
+        if board.can_castle(piece.color, QUEEN):
+            moves.append(Move(sq, sq.left.left,
+                              metadata={Move.QCASTLE: True}))
+
+    return moves
+
+def move(db, store_key, san_from_sq, san_to_sq, promote=None, compare_id=None):
+    """ Make a move from san_from_sq to san_to_sq, Return the move if
+    it was made, or None otherwise.
+
+    If compare_ids is True, will make sure the player id of the moving
+    color is the same as the given compare_id. """
+    from_sq = Square.FromSan(san_from_sq)
+    to_sq = Square.FromSan(san_to_sq)
+
+    if not from_sq.valid or not to_sq.valid:
+        return None
+
+    board = RedisKungFuBoard(db, store_key)
+
+    piece = board[from_sq]
+    o_piece = board[to_sq]
+
+    for move in moves(db, store_key, san_from_sq):
+        if move.to_sq == to_sq and move.promote == promote:
+            move_time = now()
+            relative_move_time = move_time - board.start_time  # internally we hold relative times
+            if piece.last_move is not None and board.cd > (relative_move_time - piece.last_move):  # move too early
+                return None
+            # TODO: Update history here
+
+            # Do move
+            board.move_piece(from_sq, to_sq, relative_move_time)
+            # Do special moves
+            if move.is_kingside_castle:
+                castle_from = to_sq.right
+                castle_to   = to_sq.left
+                board.move_piece(castle_from, castle_to, relative_move_time)
+
+            if move.is_queenside_castle:
+                castle_from = to_sq.left.left
+                castle_to = to_sq.right
+                board.move_piece(castle_from, castle_to, relative_move_time)
+
+            if move.promote:
+                board.put_piece(move.promote, piece.color, to_sq, relative_move_time)
+
+            # Update castles
+            for color in COLORS:
+                king_sqs  = CASTLE_DISABLING_SQUARES[color][KING]
+                queen_sqs = CASTLE_DISABLING_SQUARES[color][QUEEN]
+                if from_sq in king_sqs or to_sq in king_sqs:
+                    board.disable_castle(color, KING)
+                if from_sq in queen_sqs or to_sq in queen_sqs:
+                    board.disable_castle(color, QUEEN)
+
+            move._metadata[Move.TIME] = relative_move_time
+
+            return move
+
+def to_dict(db, store_key):
+    """ Return a dictionary representing the game """
+    board = RedisKungFuBoard(db, store_key)
+    res = {
+        "cd": boad.cd,
+        "history": None, #TODO,
+        "current_time": now(),
+        "start_time":   board.start_time,
+        "nfen": "{} {} {}".format(board.fen, board.castles_nfen, board.move_number),
+        "times": {}
+    }
+
+    for r in range(8):
+        rank = r + 1
+        for f in range(8):
+            file = f + 1
+            sq = Square.FromFileRank(file, rank)
+            piece = board.get_piece[sq]
+            if (piece.last_move):  # only pass non-None times
+                res["times"][sq.san] = piece.last_move
+
+    return res
+
+def create_pawn_moves(from_sq, to_sq, color, extra_flags=None):
+    """ create pawn moves between squares, assuming the move is legal, and returns a list.
+    """
+    moves = []
+
+    if not extra_flags:
+        extra_flags = {}
+
+    if to_sq.rank == PAWN_PROMOTE_RANK[color]:
+        for piece in [QUEEN, ROOK, BISHOP, KNIGHT]:
+            extra_flags.update({Move.PROMOTE: piece})
+            move = Move(from_sq, to_sq, metadata=extra_flags)
+            moves.append(move)
+    else:
+        moves.append(Move(from_sq, to_sq, metadata=extra_flags))
+
+    return moves
+
+
+def create_game_from_nfen(db, cd, store_key, *, exp=None, nfen=None):
+    """ Initialize a new game from given nFEN in redis store at given store_key.
+
+    nFEN, or not FEN, is based on the official FEN but without the 2nd, 4th and 5th parts,
+    and where the move number is in half moves.
+    For FEN notation see https://en.wikipedia.org/wiki/Forsyth%E2%80%93Edwards_Notation.
+    nFEN is not complete, not containing the last move timestamp of each piece and current time
+    """
+    if not nfen:
+        nfen = STARTING_NFEN
+
+    board = RedisKungFuBoard(redis_db=db, cd=cd, store_key=store_key, exp=exp)
+    board.clear()
+    rows, castles, move_num = nfen.split(" ")
+
+    for (rank, row) in enumerate(rows.split("/")):
+        file = 0
+        for l in row:
+            sq = Square.FromFileRank(file + 1, 8 - rank )  # FEN ranks go from top to bottom
+            try:
+                spaces = int(l)
+                file += spaces
+            except ValueError:  # not an integer, then
+                if l.isupper():
+                    color = WHITE
+                else:
+                    color = BLACK
+                board.put_piece(l.lower(), color, sq)
+                file += 1
+
+    board.set_move_number(int(move_num))
+    board.set_start_time(now())
+    board.set_castles(castles)
+
+    kings = board.get_all_pieces(type=KING)
+    if len(kings) >= 3 or len(kings) == 0:
+        raise ValueError("Invalid board given, should have 1 or 2 kings")
+
+    return board
 
 ########################################################################################################
 # Utility functions                                                                                    #
