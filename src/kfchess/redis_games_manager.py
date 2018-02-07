@@ -34,6 +34,7 @@ class RedisGamesManager():
         """ an event loop, reading for messages on in_queue and responding on out_queue """
         done = False
         print("[{}] Reading queue {}".format(multiprocessing.current_process().name, in_q))
+        run_games_loop(self, self._games_in, self._out)
         while not done:
             _, out = db.blpop(in_q)
             try:
@@ -76,20 +77,17 @@ class RedisGamesManager():
             print("[{}] Reading queue {}".format(multiprocessing.current_process().name, in_q))
             while not done:
                 _, out = db.blpop(in_q)
-                gid, cmd, data = json.loads(out)
-                gid_queue = self._game_key_from_id(gid)
-                if not self._db.exists(gid_queue):
-                    cmd.rpush(out_q, ["error-ind", {"reason": "invalid game id"}])
+                game_store, cmd, data = json.loads(out)
+                if not self._db.exists(game_store):
+                    cmd.rpush(out_q, ["error-ind", {"reason": "invalid store"}])
                     return
                 if cmd == "move-req":
                     res = None
                     try:
-                        player_id, move = data
-                        if _pids[game[move['from']].color] == player_id:
-                            res = kfc.move(db, gid_queue, move['from'], move['to'], move.get('promote'))
-                    except (KeyError, TypeError, AttributeError, ValueError):
-                        pass
-                    db.rpush(out_q, prepare_move_cnf(res, game_id, player_id))
+                        res = kfc.move(db, game_store, move['from'], move['to'], move.get('promote'))
+                    except KeyError:
+                        print("Invalid move!")
+                    db.rpush(out_q, prepare_move_cnf(res, game_store))
                     db.expire(out_q, 3600)
                 if cmd == "exit-req":
                     db.rpush(out_q, prepare_exit_cnf(game_id))
