@@ -33,13 +33,17 @@ class RedisGamesManager():
     def run(self):
         """ an event loop, reading for messages on in_queue and responding on out_queue """
         done = False
+        db = self._db
+        in_q = self._ctrl_in
+        game_loop_p = self.run_games_loop(self._games_in)
         print("[{}] Reading queue {}".format(multiprocessing.current_process().name, in_q))
-        run_games_loop(self, self._games_in, self._out)
         while not done:
             _, out = db.blpop(in_q)
             try:
                 cmd, data = json.loads(out)
             except Exception as ex:
+                print(_, out)
+                print(ex)
                 self._db.rpush(self._out, ["error-ind", out, repr(ex)])
                 cmd = None
             if cmd == "game-req":
@@ -53,15 +57,18 @@ class RedisGamesManager():
 
                     self.manage_game(game)
                     self._db.rpush(self._out, ["game-cnf", {"in_queue": self._games_in,
-                                                            "store_key": game_key}]
+                                                            "store_key": game_key}])
                 except KeyError as ex:
                     self._db.rpush(self._out, ["error-ind", out, repr(ex)])
             if cmd == "exit-req":
                 print("exit-req received")
-                for _, q in self._games:
-                    # Push from the left to prevent farther events processing
-                    self._db.lpush(q, "exit-req")
-                self._db.rpush(self._out, "exit-cnf")
+                
+                # Push from the left to prevent farther events processing
+                self._db.lpush(self._games_in, json.dumps([0, "exit-req", None]))
+                game_loop_p.join()
+                cnf = prepare_exit_cnf()
+                print(cnf)
+                self._db.rpush(self._out, cnf)
                 self._db.expire(self._out, 3600)
                 done = True
 
@@ -77,32 +84,42 @@ class RedisGamesManager():
             print("[{}] Reading queue {}".format(multiprocessing.current_process().name, in_q))
             while not done:
                 _, out = db.blpop(in_q)
-                game_store, cmd, data = json.loads(out)
-                if not self._db.exists(game_store):
-                    cmd.rpush(out_q, ["error-ind", {"reason": "invalid store"}])
-                    return
-                if cmd == "move-req":
-                    res = None
-                    try:
-                        res = kfc.move(db, game_store, move['from'], move['to'], move.get('promote'))
-                    except KeyError:
-                        print("Invalid move!")
-                    db.rpush(out_q, prepare_move_cnf(res, game_store))
-                    db.expire(out_q, 3600)
+                game_id, cmd, data = json.loads(out)
+
                 if cmd == "exit-req":
-                    db.rpush(out_q, prepare_exit_cnf(game_id))
+                    db.rpush(out_q, prepare_exit_cnf())
                     db.expire(out_q, 3600)
                     done = True
+                else:
+                    game_store = self._gam_key_from_id(game_id)
+                    if not self._db.exists(game_store):
+                        cmd.rpush(out_q, ["error-ind", {"reason": "invalid game id"}])
+                        return
+                    if cmd == "move-req":
+                        res = None
+                        try:
+                            res = kfc.move(db, game_store, move['from'], move['to'], move.get('promote'))
+                        except KeyError:
+                            print("Invalid move!")
+                        db.rpush(out_q, prepare_move_cnf(res, game_id))
+                        db.expire(out_q, 3600)
         """ poll_in_queue done """
+        if not out_queue:
+            out_queue = self._out
         p = multiprocessing.Process(target=poll_in_queue, args=(self._db, in_queue, out_queue),
                                     name="worker:{}".format(1))
 
         p.daemon = True
-        self._games.append((p, in_queue))
         p.start()
+
+        return p
 
     def _game_key_from_id(self, game_id):
         return "{}:games:{}".format(self._key_base, game_id)
+
+    @property
+    def games_queue(self):
+        return self._games_in
 
 
 def run_game_manager(db, in_q, out_q):
@@ -118,10 +135,10 @@ def prepare_move_cnf(move, game_id, player_id):
                 "promote": move.promote,
                 "time":    move.time
                 }
-    return json.dumps([game_id, 'move-cnf', [player_id, move]])
+    return json.dumps([game_id, 'move-cnf', move])
 
-def prepare_exit_cnf(game_id):
-    return json.dumps([game_id, 'exit-cnf', None])
+def prepare_exit_cnf():
+    return json.dumps(['exit-cnf', multiprocessing.current_process().name])
 
 if __name__ == "__main__":
     import sys

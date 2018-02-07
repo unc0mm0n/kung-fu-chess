@@ -3,6 +3,7 @@ import uuid
 import time
 import json
 import itertools
+from multiprocessing import Process
 
 import pytest
 
@@ -10,27 +11,40 @@ from kfchess.game import *
 from kfchess.redis_games_manager import RedisGamesManager
 
 #Todo: get this from config to be setup dependant
-redis_db = redis.StrictRedis()
-out_q = "out:{}".format(uuid.uuid4())
+@pytest.fixture
+def db():
+    _db = redis.StrictRedis()
+    return _db
 
-def gen_nfen_args(exp=100):
-    return {
-        'board_class': RedisKungFuBoard,
-        'redis_db': redis_db,
-        'store_key': "board_tmp:{}".format(uuid.uuid4()),
-        'exp': exp
-}
+@pytest.fixture
+def in_q():
+    return "in:{}".format(uuid.uuid4())
 
-def test_manage_game_creates_process():
-    rgm = RedisGamesManager(redis_db, out_q)
-    kfc = KungFuChess.FromNfen(0, **gen_nfen_args())
-    in_q = "in:{}".format(uuid.uuid4())
-    rgm.manage_game(kfc, 1, 0, 1, in_q)
-    assert len(rgm._p) == 1
-    assert rgm._p[0].name == "game:1"
-    assert rgm._p[0].is_alive()
-    rgm._p[0].terminate()
+@pytest.fixture
+def out_q():
+    return "out:{}".format(uuid.uuid4())
 
+def run_rgm(db, in_q, out_q):
+    rgm = RedisGamesManager(db, in_q, out_q)
+    print("running rgm")
+    p = Process(target=rgm.run)
+    p.daemon = False  # need children
+    p.start()
+    return p, rgm.games_queue
+
+def test_manage_game_quits(db, in_q, out_q):
+    p, games_in_q = run_rgm(db, in_q, out_q)
+    db.rpush(in_q, json.dumps(["exit-req", None]))
+    _, res  = db.blpop(out_q, 1)
+    _, res2 = db.blpop(out_q, 1)
+    assert res is not None and res2 is not None
+    r, _ = json.loads(res)
+    r2, _ = json.loads(res2)
+    assert r == "exit-cnf"
+    assert r2 == "exit-cnf"
+    p.join(1)
+
+"""
 def test_manage_game_correct_response_to_exit():
     rgm = RedisGamesManager(redis_db, out_q)
     kfc = KungFuChess.FromNfen(0, **gen_nfen_args())
@@ -131,3 +145,4 @@ def test_manage_game_correct_response_to_move():
     # Test illegal moves
     redis_db.expire(out_q, 0)
     rgm._p[0].terminate()
+ """

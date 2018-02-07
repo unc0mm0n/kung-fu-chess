@@ -570,12 +570,9 @@ def moves(db, store_key, san_sq):
 
     return moves
 
-def move(db, store_key, san_from_sq, san_to_sq, promote=None, compare_id=None):
+def move(db, store_key, san_from_sq, san_to_sq, promote=None):
     """ Make a move from san_from_sq to san_to_sq, Return the move if
-    it was made, or None otherwise.
-
-    If compare_ids is True, will make sure the player id of the moving
-    color is the same as the given compare_id. """
+    it was made, or None otherwise. """
     from_sq = Square.FromSan(san_from_sq)
     to_sq = Square.FromSan(san_to_sq)
 
