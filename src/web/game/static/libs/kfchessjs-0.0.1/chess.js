@@ -1262,16 +1262,19 @@ var Chess = function(nfen, start_time) {
 
             // allow the user to specify the sloppy move parser to work around over
             // disambiguation bugs in Fritz and Chessbase
-            var sloppy = (typeof options !== 'undefined' && 'sloppy' in options) ?
-                options.sloppy : false;
+            if (typeof options === 'undefined')
+            {
+                options = {};
+            }
+            var sloppy = ('sloppy' in options) ? options.sloppy : false;
 
             var move_obj = null;
 
             if (typeof move === 'string') {
                 move_obj = move_from_san(move, sloppy, options);
             } else if (typeof move === 'object') {
+                options.square = move.from; // we are making a move, so only check that move
                 var moves = generate_moves(options);
-
                 /* convert the pretty move object to an ugly move object */
                 for (var i = 0, len = moves.length; i < len; i++) {
                     if (move.from === algebraic(moves[i].from) &&

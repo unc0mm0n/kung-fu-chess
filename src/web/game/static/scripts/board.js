@@ -45,7 +45,6 @@ $(window).ready(function() {
       elem.css('height', percent + "%");
       elem.css('width', "100%");
       expected += interval;
-
       if (dnow - start < total) {
         setTimeout(disableSquareRec, Math.max(0, interval - dt), start, expected, total, elem, sq); // take into account drift
       }
@@ -107,14 +106,15 @@ $(window).ready(function() {
 
       console.log("received move");
       console.log(move_desc);
-      var move = game.move(move_desc, {
+      var move = move_desc.move;
+      var res  = game.move(move, {
         ignore_color: true,
         cd: cd,
         time: move_desc.time
       });
-      if (move === null)
+      if (res === null)
       {
-        console.log("Invalid move received, (not) requesting sync");
+        console.log("Invalid move received, requesting sync");
         socket.emit("sync-req", game_id);
         return;
       }
@@ -124,11 +124,11 @@ $(window).ready(function() {
         window.location = "/";
       }
 
-      var res = board.position(game.nfen());
-      for (var i = 0; i < res.length; i++) {
-        disableSquare(res[i].destination, cd, move_desc.time)
+      var changes = board.position(game.nfen());
+      for (var i = 0; i < changes.length; i++) {
+        disableSquare(changes[i].destination, cd, move.time);
       }
-      disableSquare(move.to, cd, move_desc.time);
+      disableSquare(move.to, cd, move.time);
     });
 
     //------------------------------------------------------------------------------
@@ -168,7 +168,6 @@ $(window).ready(function() {
         ignore_color: true,
         cooldown_time: cd
       });
-
       var move = null;
 
       for (var i = 0; i < piece_moves.length; i++) {
