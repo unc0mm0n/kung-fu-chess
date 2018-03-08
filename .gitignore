@@ -1,6 +1,5 @@
 # vim
-*.swp
-
+*.sw*
 # python env
 py3nv
 __pycache__

@@ -8,12 +8,14 @@ greenlet==0.4.12
 gunicorn==19.7.1
 itsdangerous==0.24
 Jinja2==2.10
+-e git+https://github.com/unc0mm0n/kung-fu-chess@5cc57d3af42e7860bec339f86529db18265ee897#egg=kfchess_server
 MarkupSafe==1.0
+pkg-resources==0.0.0
 pluggy==0.6.0
 py==1.5.2
 pytest==3.3.2
 python-engineio==2.0.2
 python-socketio==1.8.4
+redis==2.10.6
 six==1.11.0
 Werkzeug==0.14.1
--e .

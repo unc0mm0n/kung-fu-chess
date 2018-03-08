@@ -271,6 +271,7 @@ class RedisKungFuBoard(KungFuBoard):
             self._set("cd", cd)
         else:
             self._cd = self._get("cd")
+
         super().__init__()
 
     def clear(self):
@@ -280,8 +281,8 @@ class RedisKungFuBoard(KungFuBoard):
                 sq = Square.FromFileRank(i+1, j+1)
                 self[sq] = Piece(EMPTY, EMPTY, None)
 
-        self._last_move_time = None
-        self.move_number     = 0
+        self.set_last_move(None)
+        self.set_move_number(0)
 
     def __getitem__(self, sq : Square) -> Piece:
         """ Get piece from square. """
@@ -303,7 +304,10 @@ class RedisKungFuBoard(KungFuBoard):
     def _get(self, key):
         """ Get a non-square key """
         self._pexpire()
-        return json.loads(self._db.hget(self._store_key, key))
+        try:
+            return json.loads(self._db.hget(self._store_key, key))
+        except TypeError:  #key not found
+            return None
 
     def _set(self, key, value):
         """ put a value in a non-square key"""
@@ -385,7 +389,6 @@ class RedisKungFuBoard(KungFuBoard):
 
     def set_last_move(self, time):
         self._set("last_move", time)
-        self._last_move_time = time
 
     def can_castle(self, color, side):
         letter = 'k' if side == KING else 'q'
@@ -479,7 +482,7 @@ class RedisKungFuBoard(KungFuBoard):
     @property
     def last_time(self):
         """ last recorded move time. """
-        return self._last_move_time
+        return self._get("last_move")
 
     @property
     def ascii(self):
@@ -495,6 +498,10 @@ class RedisKungFuBoard(KungFuBoard):
     @property
     def castles(self):
         return self._get("castles")
+
+    @property
+    def move_number(self):
+        return self._get("move_number")
 
 @property
 def game_winner(db, store_key):
@@ -625,11 +632,11 @@ def to_dict(db, store_key):
     """ Return a dictionary representing the game """
     board = RedisKungFuBoard(db, store_key)
     res = {
-        "cd": boad.cd,
+        "cd": board.cd,
         "history": None, #TODO,
         "current_time": now(),
         "start_time":   board.start_time,
-        "nfen": "{} {} {}".format(board.fen, board.castles_nfen, board.move_number),
+        "nfen": "{} {} {}".format(board.fen, board.castles, board.move_number),
         "times": {}
     }
 
@@ -638,7 +645,7 @@ def to_dict(db, store_key):
         for f in range(8):
             file = f + 1
             sq = Square.FromFileRank(file, rank)
-            piece = board.get_piece[sq]
+            piece = board[sq]
             if (piece.last_move):  # only pass non-None times
                 res["times"][sq.san] = piece.last_move
 

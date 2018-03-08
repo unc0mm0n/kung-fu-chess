@@ -10,6 +10,7 @@ Future:
 import threading
 import multiprocessing
 import json
+import traceback
 from uuid import uuid4
 
 import redis
@@ -41,13 +42,7 @@ class RedisGamesManager():
             _, out = db.blpop(in_q)
             try:
                 cmd, data = json.loads(out)
-            except Exception as ex:
-                print(_, out)
-                print(ex)
-                self._db.rpush(self._out, ["error-ind", out, repr(ex)])
-                cmd = None
-            if cmd == "game-req":
-                try:
+                if cmd == "game-req":
                     game_key = self._game_key_from_id(data["game_id"])
                     board = kfc.create_game_from_nfen(db = self._db,
                                                       cd = data["cd"],
@@ -55,25 +50,29 @@ class RedisGamesManager():
                                                       nfen = data.get("nfen", None),
                                                       exp=data.get("exp", None))
 
-                    self.manage_game(game)
-                    self._db.rpush(self._out, ["game-cnf", {"in_queue": self._games_in,
-                                                            "store_key": game_key}])
-                except KeyError as ex:
-                    self._db.rpush(self._out, ["error-ind", out, repr(ex)])
-            if cmd == "exit-req":
-                print("exit-req received")
-                
-                # Push from the left to prevent farther events processing
-                self._db.lpush(self._games_in, json.dumps([0, "exit-req", None]))
-                game_loop_p.join()
-                cnf = prepare_exit_cnf()
-                print(cnf)
-                self._db.rpush(self._out, cnf)
-                self._db.expire(self._out, 3600)
-                done = True
+                    self._db.rpush(self._out, json.dumps(["game-cnf", {"in_queue": self._games_in,
+                                                                       "store_key": game_key}]))
+                elif cmd == "exit-req":
+                    print("exit-req received")
+
+                    # Push from the left to prevent farther events processing
+                    self._db.lpush(self._games_in, json.dumps([0, "exit-req", None]))
+                    game_loop_p.join()
+                    cnf = prepare_exit_cnf()
+                    self._db.rpush(self._out, cnf)
+                    self._db.expire(self._out, 3600)
+                    done = True
+                else:
+                    print("Unknown command {}".format(cmd))
+                    self._db.rpush(self._out, prepare_ctrl_error_ind("unknown command", command=cmd))
+            except Exception as ex:
+                print(_, out)
+                traceback.print_exc()
+                self._db.rpush(self._out, prepare_ctrl_error_ind("exception", exc=ex))
+                cmd = None
 
     def run_games_loop(self, in_queue, out_queue=None):
-        """ Start process responsible for reading game related requests and executing them 
+        """ Start process responsible for reading game related requests and executing them
 
         If out_queue is not given, the default out_queue will be used.
         Note that in_queues must be unique per game loop, and different from the manager's own in_queue"""
@@ -83,26 +82,37 @@ class RedisGamesManager():
             done = False
             print("[{}] Reading queue {}".format(multiprocessing.current_process().name, in_q))
             while not done:
-                _, out = db.blpop(in_q)
-                game_id, cmd, data = json.loads(out)
-
-                if cmd == "exit-req":
-                    db.rpush(out_q, prepare_exit_cnf())
-                    db.expire(out_q, 3600)
-                    done = True
-                else:
-                    game_store = self._gam_key_from_id(game_id)
-                    if not self._db.exists(game_store):
-                        cmd.rpush(out_q, ["error-ind", {"reason": "invalid game id"}])
-                        return
-                    if cmd == "move-req":
-                        res = None
-                        try:
-                            res = kfc.move(db, game_store, move['from'], move['to'], move.get('promote'))
-                        except KeyError:
-                            print("Invalid move!")
-                        db.rpush(out_q, prepare_move_cnf(res, game_id))
+                try:
+                    _, out = db.blpop(in_q)
+                    game_id, cmd, data = json.loads(out)
+                    if cmd == "exit-req":
+                        db.rpush(out_q, prepare_exit_cnf())
                         db.expire(out_q, 3600)
+                        done = True
+                    else:
+                        game_store = self._game_key_from_id(game_id)
+                        if not db.exists(game_store):
+                            db.rpush(out_q, json.dumps(["error-ind", {"reason": "invalid game id"}]))
+                            continue
+                        if cmd == "move-req":
+                            res = None
+                            try:
+                                res = kfc.move(db, game_store, data['from'], data['to'], data.get('promote'))
+                            except KeyError:
+                                print("Invalid move!")
+                            db.rpush(out_q, prepare_move_cnf(res, game_id))
+                            db.expire(out_q, 3600)
+                        elif cmd == "sync-req":
+                            db.rpush(out_q, prepare_sync_cnf(game_id, db, self._game_key_from_id(game_id)))
+                            db.expire(out_q, 3600)
+                        else:
+                            print("Unknown command {}".format(cmd))
+                            self._db.rpush(self._out, json.dumps(["error-ind", {"command": cmd, "reason": "Unknown command"}]))
+                except Exception as ex:
+                    print(_, out)
+                    traceback.print_exc()
+                    db.rpush(out_q, json.dumps(["error-ind", {"reason": "Exception", "exc": repr(ex)}]))
+            print(done)
         """ poll_in_queue done """
         if not out_queue:
             out_queue = self._out
@@ -126,7 +136,7 @@ def run_game_manager(db, in_q, out_q):
     game_manager = RedisGamesManager(db, in_q, out_q)
     game_manager.run()
 
-def prepare_move_cnf(move, game_id, player_id):
+def prepare_move_cnf(move, game_id):
     """ Prepare json for a move command response. """
     if move is not None:
         move =  {
@@ -137,8 +147,20 @@ def prepare_move_cnf(move, game_id, player_id):
                 }
     return json.dumps([game_id, 'move-cnf', move])
 
+def prepare_sync_cnf(game_id, db, store_key):
+    """ Prepare json for a sync command response. """
+    return json.dumps([game_id, 'sync-cnf', kfc.to_dict(db, store_key)])
+
 def prepare_exit_cnf():
     return json.dumps(['exit-cnf', multiprocessing.current_process().name])
+
+def prepare_ctrl_error_ind(reason, **kwargs):
+    kwargs.update({"reason": reason})
+    return json.dumps(["error-ind", {k: str(v) for k,v in kwargs.items()}])
+
+def prepare_game_error_ind(game_id, reason, **kwargs):
+    kwargs.update({"reason": reason})
+    return json.dumps([game_id, "error-ind", {k: str(v) for k,v in kwargs.items()}])
 
 if __name__ == "__main__":
     import sys

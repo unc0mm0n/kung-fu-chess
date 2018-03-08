@@ -452,3 +452,31 @@ def test_game_winner_capture(db, key):
     assert board.kings[BLACK] == None
     print(board.kings)
     assert board.winner == WHITE
+
+def test_board_clear(db, key):
+    board = create_game_from_nfen(db, 0, key, exp=5000)
+    assert board.fen == "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR"
+
+    board.clear()
+    assert board.fen == "8/8/8/8/8/8/8/8"
+    assert board.move_number == 0
+
+def test_board_move_number_updates(db, key):
+    board = create_game_from_nfen(db, 0, key, exp=5000)
+    assert board.move_number == 1
+    assert move(db, key, 'e2', 'e4') is not None
+    assert board.move_number == 2
+
+def test_board_to_dict(db, key):
+    board = create_game_from_nfen(db, 1000, key, exp=5000)
+    d = to_dict(db, key)
+    assert d["current_time"] >= d["start_time"]
+    assert d["cd"] == 1000
+    assert d["nfen"] == "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR KQkq 1"
+    assert not d["times"]
+    
+    assert move(db, key, 'e2', 'e4') is not None
+    d = to_dict(db, key)
+    assert 'e4' in d["times"]
+    assert len(d['times'].keys()) == 1
+

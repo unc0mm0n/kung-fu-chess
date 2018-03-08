@@ -19,7 +19,7 @@ def poll_game_cnfs(db, game_cnfs_queue, socketio):
         game_id, cmd, data = json.loads(cnf)
         if cmd == "sync-cnf":
             socketio.emit('sync-cnf',
-                    data,
+                    data(store_key),
                     room=game_id,
                     namespace="/game")
         elif cmd == "move-cnf":
@@ -34,3 +34,5 @@ def poll_game_cnfs(db, game_cnfs_queue, socketio):
                 {'result': SUCCESS, 'move': move},
                  room=game_id,
                  namespace="/game")
+
+
