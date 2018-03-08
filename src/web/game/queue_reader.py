@@ -12,18 +12,21 @@ FAIL = 'fail'
 SUCCESS = 'success'
 
 def poll_game_cnfs(db, game_cnfs_queue, socketio):
-    """ Poll a given moves queue in redis object for new moves, emitting them to players and updating relevant parts in game store."""
+    """ Poll a given response queue in redis object for new responses,
+    emitting them to players as necessary."""
     while True:
         _, cnf = db.blpop(game_cnfs_queue)
         print(cnf)
         game_id, cmd, data = json.loads(cnf)
         if cmd == "sync-cnf":
+            player_color = "w" #TODO: Get real color, obviously..
             socketio.emit('sync-cnf',
-                    data(store_key),
+                    {"color": player_color,
+                     "board": data},
                     room=game_id,
                     namespace="/game")
         elif cmd == "move-cnf":
-            player_id, move = data
+            move = data
             if move is None:
                 socketio.emit('move-cnf',
                 {'result': FAIL, 'reason': 'illegal move'},
@@ -34,5 +37,8 @@ def poll_game_cnfs(db, game_cnfs_queue, socketio):
                 {'result': SUCCESS, 'move': move},
                  room=game_id,
                  namespace="/game")
+        elif cmd == "error-ind":
+            #TODO: Add proper logging instead of total collapse
+            raise Exception("Error ind received!!")
 
 

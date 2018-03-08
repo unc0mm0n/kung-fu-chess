@@ -43,7 +43,8 @@ class RedisGamesManager():
                 game_id, cmd, data = json.loads(out)
                 game_key = self._game_key_from_id(game_id)
                 if cmd == "game-req":
-                    board = kfc.create_game_from_nfen(db = self._db,
+                    if not db.exists(game_key):
+                        board = kfc.create_game_from_nfen(db = self._db,
                                                       cd = data["cd"],
                                                       store_key=game_key,
                                                       nfen = data.get("nfen", None),

@@ -17,7 +17,7 @@ from web.game.queue_reader import poll_game_cnfs, FAIL, SUCCESS
 @pytest.fixture
 def env():
     # start server
-    os.environ["KFCHESS_CONFIG"] = "/app/kung-fu-chess/tests/web/config.py"  #To do - not fixed
+    os.environ["KFCHESS_CONFIG"] = "/home/yuvalw/app/kung-fu-chess/tests/web/config.py"  #To do - not fixed
     app = create_app()
     socketio = SocketIO(app)
     def on_join(room):
