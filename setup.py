@@ -21,7 +21,6 @@ def read(*names, **kwargs):
         encoding=kwargs.get('encoding', 'utf8')
     ).read()
 
-
 setup(
     name='kfchess_server',
     version='0.0.1',
@@ -41,30 +40,10 @@ setup(
     keywords=[
         'chess', 'server', 'kung-fu-chess' # eg: 'keyword1', 'keyword2', 'keyword3',
     ],
-    install_requires=[
-        'attrs==17.4.0',
-        'click==6.7',
-        'enum34==1.1.6',
-        'eventlet==0.22.0',
-        'Flask==0.12.2',
-        'Flask-SocketIO==2.9.3',
-        'greenlet==0.4.12',
-        'gunicorn==19.7.1',
-        'itsdangerous==0.24',
-        'Jinja2==2.10',
-        'MarkupSafe==1.0',
-        'pluggy==0.6.0',
-        'py==1.5.2',
-        'pytest==3.3.2',
-        'python-engineio==2.0.2',
-        'python-socketio==1.8.4',
-        'six==1.11.0',
-        'Werkzeug==0.14.1'
-        # eg: 'aspectlib==1.1.1', 'six>=1.7',
-    ],
+    install_requires= read("requirements.txt").split(),
     extras_require={
         # eg:
         #   'rst': ['docutils>=0.11'],
-        #   ':python_version=="2.6"': ['argparse'],
+        #   ':python_version>="2.6"': ['argparse'],
     }
 )

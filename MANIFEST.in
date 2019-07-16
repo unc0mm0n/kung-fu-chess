@@ -1,0 +1,8 @@
+recursive-include src/web/templates/*
+recursive-include src/web/static/*
+
+recursive-include src/web/game/templates/*
+recursive-include src/web/game/static/*
+
+recursive-include src/web/main/templates/*
+recursive-include src/web/main/static/*

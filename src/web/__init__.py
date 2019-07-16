@@ -6,6 +6,7 @@ socketio = SocketIO()
 
 def create_app():
     app = Flask(__name__)
+    #print(os.path.dirname(__file__))
     app.config.from_object("web.defaultconfig")
     if "KFCHESS_CONFIG" in os.environ:
         app.config.from_envvar("KFCHESS_CONFIG")

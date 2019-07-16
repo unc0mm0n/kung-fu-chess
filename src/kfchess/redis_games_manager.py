@@ -52,6 +52,12 @@ class RedisGamesManager():
 
                     self._db.rpush(self._out, json.dumps([game_id, "game-cnf", {"in_queue": in_q,
                                                                        "store_key": game_key}]))
+                elif cmd == "join-req":
+                    if not db.exists(game_key):
+                        self._db.rpush(self._out, json.dumps([game_id, "join-cnf", None])
+                    else:
+                        #todo: see if color is open, if yes return color otherwise return observer.
+                        self._db.rpush(self._out, json.dumps([game_id, "join-cnf", {"color": "observer"}),
                 elif cmd == "exit-req":
                     print("exit-req received")
 

@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+
+{% block title %}
+Home
+{% endblock %}
+
+{% block page_content %}
+<h2 id="content-title">Current games:</h2>
+    {% for key in games %}
+        <div><a href="/game/{{key}}">{{key}}</a></div>
+    {% endfor %}
+
+{% endblock page_content %}

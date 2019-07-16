@@ -257,7 +257,7 @@ class RedisKungFuBoard(KungFuBoard):
         the expire of the game (from last set or get) will be set to exp milliseconds if it is not none.
         cd if not specified will be taken from db, """
         self._db        = redis_db
-        self._store_key = store_key
+        self._store_key = str(store_key)
         self._exp       = None
         if exp:
             self._set("exp", exp)

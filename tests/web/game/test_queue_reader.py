@@ -17,7 +17,7 @@ from web.game.queue_reader import poll_game_cnfs, FAIL, SUCCESS
 @pytest.fixture
 def env():
     # start server
-    os.environ["KFCHESS_CONFIG"] = "/home/yuvalw/app/kung-fu-chess/tests/web/config.py"  #To do - not fixed
+    os.environ["KFCHESS_CONFIG"] = os.path.join(os.path.dirname(__file__), "../config.py")
     app = create_app()
     socketio = SocketIO(app)
     def on_join(room):
@@ -36,15 +36,16 @@ def test_poll_reads_messages_and_responds(env):
     client = env.socketio.test_client(env.app)
     game_id = 1
     client.emit("join", 1)
-    env.db.rpush(env.q, json.dumps([1, "sync-cnf", "test"]))
+    env.db.rpush(env.q, json.dumps([game_id, 2, "move-cnf", "test"]))
     env.db.expire(env.q, 10)
     time.sleep(0.1)
 
     assert env.db.llen(env.q) == 0
     received = client.get_received('/game')
+    print(received)
     assert len(received) == 1
     assert len(received[0]['args']) == 1
-    assert received[0]['args'][0] == "test"
+    assert received[0]['args'][0]["move"] == "test"
 
 def test_poll_sends_good_move_to_room(env):
     w_client = env.socketio.test_client(env.app)
@@ -58,7 +59,7 @@ def test_poll_sends_good_move_to_room(env):
     b_client.emit("join", bid)
     time.sleep(0.01)
 
-    env.db.rpush(env.q, json.dumps([1, "move-cnf", [2, {"from": "e2", "to": "e4"} ]]))
+    env.db.rpush(env.q, json.dumps([gid, wid, "move-cnf", {"from": "e2", "to": "e4"} ]))
     env.db.expire(env.q, 10)
     time.sleep(0.1)
 
@@ -81,7 +82,7 @@ def test_poll_sends_bad_move_to_player(env):
     b_client.emit("join", bid)
     time.sleep(0.01)
 
-    env.db.rpush(env.q, json.dumps([gid, "move-cnf", [wid, None]]))
+    env.db.rpush(env.q, json.dumps([gid, wid, "move-cnf", None]))
     env.db.expire(env.q, 10)
     time.sleep(0.1)
 

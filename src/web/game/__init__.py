@@ -6,7 +6,7 @@ from flask import Blueprint
 
 from . import queue_reader
 
-game_bp = Blueprint('game', __name__, static_folder='static')
+game_bp = Blueprint('game', __name__, static_folder='static', template_folder='templates')
 
 def init_game(i_app, i_socketio):
     global _app
@@ -20,6 +20,8 @@ def init_game(i_app, i_socketio):
     _t.daemon = True
     _t.start()
 
+#TODO: Move requests to different file.
+#TODO: Numbers..
 def send_sync_req(game_id):
     push_req("sync-req", None, game_id)
 
