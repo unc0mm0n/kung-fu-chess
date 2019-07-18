@@ -41,7 +41,7 @@ def test_poll_reads_messages_and_responds(env):
     client = get_client(env)
     game_id = 1
     client.emit("join", game_id)
-    env.db.rpush(env.q, json.dumps([game_id, 2, "move-cnf", "test"]))
+    env.db.rpush(env.q, json.dumps([game_id, 2, "move-cnf", {"state": "a", "move": "test"}]))
     env.db.expire(env.q, 10)
     time.sleep(0.1)
 
@@ -64,7 +64,7 @@ def test_poll_sends_good_move_to_room(env):
     b_client.emit("join", bid)
     time.sleep(0.01)
 
-    env.db.rpush(env.q, json.dumps([gid, wid, "move-cnf", {"from": "e2", "to": "e4"} ]))
+    env.db.rpush(env.q, json.dumps([gid, wid, "move-cnf", {"state" : "playing", "move": {"from": "e2", "to": "e4"}} ]))
     env.db.expire(env.q, 10)
     time.sleep(0.1)
 

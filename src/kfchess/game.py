@@ -26,7 +26,6 @@ PIECES = [KING, QUEEN, ROOK, KNIGHT, BISHOP, PAWN]
 # colors
 BLACK = 'b'
 WHITE = 'w'
-EMPTY = 'e'
 
 COLORS = [BLACK, WHITE]
 

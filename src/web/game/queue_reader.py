@@ -42,6 +42,7 @@ def poll_game_cnfs(db, game_cnfs_queue, socketio):
                 room=player_id,
                 namespace="/game")
             else:
+                print(data)
                 socketio.emit('move-cnf',
                 {'result': SUCCESS, 'move': data["move"]},
                  room=game_id,
