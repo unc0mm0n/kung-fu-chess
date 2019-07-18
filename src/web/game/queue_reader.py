@@ -19,32 +19,35 @@ def poll_game_cnfs(db, game_cnfs_queue, socketio):
         _, cnf = db.blpop(game_cnfs_queue)
         game_id, player_id, cmd, data = json.loads(cnf)
         if cmd == "sync-cnf":
-            print('emitting sync-cnf to {}'.format(player_id))
-            color = "o"
-            if player_id == data["white"]:
-                color = "w"
-            elif player_id == data["black"]:
-                color = "b"
-            socketio.emit('sync-cnf',
-                        {'color': color,
-                        'board': data['board']},
-                    room=player_id,
-                    namespace="/game")
+            if data is None:
+                socketio.emit('sync-cnf', 
+                              {"result": FAIL},
+                              room=player_id,
+                              namespace="/game")
+            else:
+                color = "o"
+                if player_id == data["white"]:
+                    color = "w"
+                elif player_id == data["black"]:
+                    color = "b"
+                socketio.emit('sync-cnf',
+                            {'color': color,
+                            'board': data['board']},
+                        room=player_id,
+                        namespace="/game")
         elif cmd == "move-cnf":
             if data is None:
-                print("emitting move-cnf (fail) to {}".format(player_id))
                 socketio.emit('move-cnf',
                 {'result': FAIL, 'reason': 'illegal move'},
                 room=player_id,
                 namespace="/game")
             else:
-                print("emitting move-cnf (success) to {}".format(game_id))
                 socketio.emit('move-cnf',
                 {'result': SUCCESS, 'move': data},
                  room=game_id,
                  namespace="/game")
         elif cmd == "error-ind":
             #TODO: Add proper logging instead of total collapse
-            raise Exception("Error ind received!!")
+            raise Exception("Error ind received!! {}".format(data))
 
 

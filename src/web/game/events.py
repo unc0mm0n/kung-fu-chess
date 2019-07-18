@@ -3,6 +3,7 @@ Event handler for game Blueprint, handles socket.io events connecting the server
 """
 
 from flask_socketio import emit, join_room, rooms
+from flask_login import current_user
 from flask import request
 
 from web.game import push_req
@@ -22,21 +23,35 @@ def send_new_game_req(game_id, player_id, cd=10000):
 @socketio.on('move-req', namespace='/game')
 def handle_game_move(game_id, move_json):
     """ ask to play a move """
-    send_move_req(game_id, request.sid, move_json)
+    if current_user.is_authenticated:
+        sid = current_user.get_id()
+        send_move_req(game_id, sid, move_json)
     emit("ind", "km")
+
+@socketio.on('new-game-req', namespace='/game')
+def handle_new_game_req(game_id):
+    """ ask to create a new game """
+    if current_user.is_authenticated:
+        join_room(game_id)
+        sid = current_user.get_id()
+        send_new_game_req(game_id, sid)
+        send_sync_req(game_id, sid)
+    emit("ind", "kj")
 
 @socketio.on('join-req', namespace='/game')
 def handle_join_req(game_id):
-    """ ask to play a move """
+    """ Ask to get updates for given game id"""
     join_room(game_id)
-    print(rooms())
-    print("joined {}, {}".format(game_id, request.sid))
-    send_new_game_req(game_id, request.sid)
-    send_sync_req(game_id, request.sid)
-    emit("ind", "kj")
+    sid = current_user.get_id() if current_user.is_authenticated else request.sid
+    send_sync_req(game_id, sid)
 
 @socketio.on('sync-req', namespace='/game')
 def handle_sync_req(game_id):
     """ ask to be synced about the state of the game """
     send_sync_req(game_id, request.sid)
     emit("ind", "ks")
+
+@socketio.on('connect')
+def handle_connect():
+    if current_user.is_authenticated:
+        join_room(current_user.get_id(), namespace="/game")

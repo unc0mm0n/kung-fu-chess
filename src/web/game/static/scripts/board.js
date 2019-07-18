@@ -70,7 +70,8 @@ $(window).ready(function() {
       if (sync_desc['result'] == 'fail') { // invalid id or not id
         //TODO: should handle in informative way, shouldn't really happen though
         console.log("failed to sync", sync_desc);
-        location.reload();
+        alert("invalid game ID")
+        location.replace("/")
         return
       }
       console.log("received sync");

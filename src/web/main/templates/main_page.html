@@ -6,6 +6,7 @@ Home
 
 {% block page_content %}
 <h2 id="content-title">Current games:</h2>
+    <div><a href="/login">log in</a></div>
     {% for key in games %}
         <div><a href="/game/{{key}}">{{key}}</a></div>
     {% endfor %}

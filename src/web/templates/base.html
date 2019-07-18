@@ -12,6 +12,13 @@
     {# header #}
     <h1 id="header-title">{{self.title()}}</h1>
     <ul id="navigation">
+        <li> {{current_user.id}} </li>
+        <li>
+        {% if current_user.is_authenticated %}
+            hello {{current_user.name}}
+        {% endif %}
+        </li>
+
     </ul>
 
     {# content #}

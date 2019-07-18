@@ -36,13 +36,12 @@ class RedisGamesManager():
         db = self._db
         in_q = self._in
         out_q = self._out
-        print("[{}] Reading queue {}".format(multiprocessing.current_process().name, in_q))
         while not done:
             _, out = db.blpop(in_q)
             try:
                 game_id, player_id, cmd, data = json.loads(out)
                 game_key = self._game_key_from_id(game_id)
-                print("[{}, {}] {} request".format(game_id, player_id, cmd))
+                print("[{}, {}] responding to {}, data={}".format(game_id, player_id, cmd, data))
                 if cmd == "game-req":
                     if not db.exists(game_key):
                         board = kfc.create_game_from_nfen(db = self._db,
@@ -58,14 +57,16 @@ class RedisGamesManager():
                     self._db.rpush(self._out, json.dumps([game_id, player_id, "game-cnf", {"in_queue": in_q,
                                                                        "store_key": game_key}]))
                 elif cmd == "join-req":
-                    self._db.rpush(self._out, json.dumps([game_id, player_id, "game-cnf", {"in_queue": in_q,
+                    if not db.exists(game_key):
+                        self._db.rpush(self._out, json.dumps([game_id, player_id, "game-cnf", None]))
+                    else:
+                        self._db.rpush(self._out, json.dumps([game_id, player_id, "game-cnf", {"in_queue": in_q,
                                                                        "store_key": game_key}]))
                 elif cmd == "exit-req":
                     print("exit-req received")
 
                     cnf = prepare_exit_cnf()
                     self._db.rpush(self._out, cnf)
-                    self._db.expire(self._out, 3600)
                     done = True
                 elif cmd == "move-req":
                     res = None
@@ -74,13 +75,15 @@ class RedisGamesManager():
                     except KeyError:
                         print("Invalid move!")
                     db.rpush(out_q, prepare_move_cnf(res, game_id, player_id))
-                    db.expire(out_q, 3600)
                 elif cmd == "sync-req":
-                    db.rpush(out_q, prepare_sync_cnf(game_id, player_id, db, self._game_key_from_id(game_id)))
-                    db.expire(out_q, 3600)
+                    if not db.exists(game_key):
+                        db.rpush(out_q, json.dumps([game_id, player_id, "sync-cnf", None]))
+                    else:
+                        db.rpush(out_q, prepare_sync_cnf(game_id, player_id, db, game_key))
                 else:
                     print("Unknown command {}".format(cmd))
                     self._db.rpush(self._out, prepare_error_ind(command=cmd, reason="Unknown command"))
+                db.expire(out_q, 3600)
             except Exception as ex:
                 print(_, out)
                 traceback.print_exc()
