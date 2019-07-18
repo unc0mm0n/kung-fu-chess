@@ -224,9 +224,36 @@ def test_moves_advanced(db, key):
     for m in ex:
         assert m in res
 
+def test_set_white(db, key):
+    board = create_game_from_nfen(db, 0, key, exp=50)
+    assert board.white is None
+    board.set_white("w")
+    assert board.white == "w"
+    with pytest.raises(Exception):
+        board.set_white("b")
+
+def test_set_black(db, key):
+    board = create_game_from_nfen(db, 0, key, exp=50)
+    assert board.black is None
+    board.set_black("b")
+    assert board.black == "b"
+    with pytest.raises(Exception):
+        board.set_black("w")
+
+def test_state_waiting_playing_switch(db, key):
+    board = create_game_from_nfen(db, 0, key, exp=50)
+    assert board.state == WAITING
+    board.set_white("a")
+    assert board.state ==WAITING
+    board.set_black("b")
+    assert board.state ==PLAYING
+
 def test_move_simple(db, key):
     board = create_game_from_nfen(db, 0, key, exp=5000)
-    move(db, key, 'e2', 'e4')
+
+    board.set_white("w")
+    board.set_black("b")
+    move("w", db, key, 'e2', 'e4')
     assert board.ascii == "rnbqkbnr\n" \
                                "pppppppp\n" \
                                "........\n" \
@@ -236,7 +263,7 @@ def test_move_simple(db, key):
                                "PPPP.PPP\n" \
                                "RNBQKBNR\n"
 
-    move(db, key, 'f1', 'c4')
+    move("w", db, key, 'f1', 'c4')
     assert board.ascii == "rnbqkbnr\n" \
                                "pppppppp\n" \
                                "........\n" \
@@ -246,7 +273,7 @@ def test_move_simple(db, key):
                                "PPPP.PPP\n" \
                                "RNBQK.NR\n"
 
-    move(db, key, 'g1', 'f3')
+    move("w", db, key, 'g1', 'f3')
     assert board.ascii == "rnbqkbnr\n" \
                                "pppppppp\n" \
                                "........\n" \
@@ -256,7 +283,7 @@ def test_move_simple(db, key):
                                "PPPP.PPP\n" \
                                "RNBQK..R\n"
 
-    move(db, key, 'e1', 'g1')       # castle
+    move("w", db, key, 'e1', 'g1')       # castle
     assert board.ascii == "rnbqkbnr\n" \
                                "pppppppp\n" \
                                "........\n" \
@@ -266,9 +293,9 @@ def test_move_simple(db, key):
                                "PPPP.PPP\n" \
                                "RNBQ.RK.\n"
 
-    move(db, key, 'g8', 'h6')
-    move(db, key, 'e7', 'e6')
-    move(db, key, 'f8', 'e7')
+    move("b", db, key, 'g8', 'h6')
+    move("b", db, key, 'e7', 'e6')
+    move("b", db, key, 'f8', 'e7')
     assert board.ascii == "rnbqk..r\n" \
                                "ppppbppp\n" \
                                "....p..n\n" \
@@ -278,8 +305,8 @@ def test_move_simple(db, key):
                                "PPPP.PPP\n" \
                                "RNBQ.RK.\n"
 
-    assert move(db, key, 'h8', 'f8') is not None
-    assert move(db, key, 'f8', 'h8') is not None
+    assert move("b", db, key, 'h8', 'f8') is not None
+    assert move("b", db, key, 'f8', 'h8') is not None
     assert board.ascii == "rnbqk..r\n" \
                                "ppppbppp\n" \
                                "....p..n\n" \
@@ -289,13 +316,26 @@ def test_move_simple(db, key):
                                "PPPP.PPP\n" \
                                "RNBQ.RK.\n"
 
-    assert move(db, key, 'e8', 'g8') is None  # no castle after rook move
+    assert move("b", db, key, 'e8', 'g8') is None  # no castle after rook move
 
-def test_moves_pawn_capture(db, key):
+def test_move_player_match(db, key):
+    board = create_game_from_nfen(db, 0, key, exp=50)
+    board.set_white("w")
+    board.set_black("b")
+    
+    assert board.fen == "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR"
+    assert move("b", db, key, 'e2', 'e4') is None
+    assert board.fen == "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR"
+    assert move("2", db, key, 'e2', 'e4') is None
+    assert board.fen == "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR"
+
+def test_move_pawn_capture(db, key):
     board = create_game_from_nfen(db, 0, key, exp=5000)
-    move(db, key, 'e2', 'e4')
-    move(db, key, 'f7', 'f5')
-    move(db, key, 'd7', 'd5')
+    board.set_white("w")
+    board.set_black("b")
+    move("w", db, key, 'e2', 'e4')
+    move("b", db, key, 'f7', 'f5')
+    move("b", db, key, 'd7', 'd5')
     assert board.ascii == "rnbqkbnr\n" \
                                "ppp.p.pp\n" \
                                "........\n" \
@@ -314,7 +354,7 @@ def test_moves_pawn_capture(db, key):
     for m in ex:
         assert m in res
 
-    assert move(db, key, 'e4', 'd5') is not None
+    assert move("w", db, key, 'e4', 'd5') is not None
     assert board.ascii == "rnbqkbnr\n" \
                                "ppp.p.pp\n" \
                                "........\n" \
@@ -326,7 +366,9 @@ def test_moves_pawn_capture(db, key):
 
 def test_move_time_delay(db, key):
     board = create_game_from_nfen(db, 100, key, exp=5000)  # delay between moves in ms
-    move(db, key, 'e2', 'e4')
+    board.set_white("w")
+    board.set_black("b")
+    move("w", db, key, 'e2', 'e4')
     assert board.ascii == "rnbqkbnr\n" \
                                "pppppppp\n" \
                                "........\n" \
@@ -336,7 +378,7 @@ def test_move_time_delay(db, key):
                                "PPPP.PPP\n" \
                                "RNBQKBNR\n"
 
-    assert move(db, key, 'e4', 'e5') is None
+    assert move("w", db, key, 'e4', 'e5') is None
     assert board.ascii == "rnbqkbnr\n" \
                                "pppppppp\n" \
                                "........\n" \
@@ -348,7 +390,7 @@ def test_move_time_delay(db, key):
 
     time.sleep(0.1)  # should be fine now (sleep is in secs)
 
-    assert move(db, key, 'e4', 'e5') is not None
+    assert move("w", db, key, 'e4', 'e5') is not None
     assert board.ascii == "rnbqkbnr\n" \
                                "pppppppp\n" \
                                "........\n" \
@@ -360,6 +402,8 @@ def test_move_time_delay(db, key):
 
 def test_move_castle_rook_delayed(db, key):
     board = create_game_from_nfen(db, 100, key, exp=5000, nfen="r3k2r/pbppqppp/1pn2n2/4p3/1bB5/2NPPN2/PPPBQPPP/R3K2R KQkq 8")
+    board.set_white("w")
+    board.set_black("b")
     assert board.ascii == "r...k..r\n" \
                                "pbppqppp\n" \
                                ".pn..n..\n" \
@@ -369,7 +413,7 @@ def test_move_castle_rook_delayed(db, key):
                                "PPPBQPPP\n" \
                                "R...K..R\n"
 
-    move(db, key, 'e1', 'g1')
+    move("w", db, key, 'e1', 'g1')
     assert board.ascii == "r...k..r\n" \
                                "pbppqppp\n" \
                                ".pn..n..\n" \
@@ -379,11 +423,11 @@ def test_move_castle_rook_delayed(db, key):
                                "PPPBQPPP\n" \
                                "R....RK.\n"
 
-    assert move(db, key, 'f1', 'e1') is None
+    assert move("w", db, key, 'f1', 'e1') is None
 
     time.sleep(0.1)  # should be fine now (sleep is in secs)
 
-    assert move(db, key, 'f1', 'e1') is not None
+    assert move("w", db, key, 'f1', 'e1') is not None
     assert board.ascii == "r...k..r\n" \
                                "pbppqppp\n" \
                                ".pn..n..\n" \
@@ -434,11 +478,13 @@ def test_game_winner_setup(db, key):
 def test_game_winner_capture(db, key):
     print("===========================")
     board = create_game_from_nfen(db, 0, key, exp=5000)
-    assert move(db, key, 'e2', 'e4') is not None
-    assert move(db, key, 'f7', 'f6') is not None
-    assert move(db, key, 'e8', 'f7') is not None
-    assert move(db, key, 'f1', 'c4') is not None
-    assert move(db, key, 'c4', 'f7') is not None
+    board.set_white("w")
+    board.set_black("b")
+    assert move("w", db, key, 'e2', 'e4') is not None
+    assert move("b", db, key, 'f7', 'f6') is not None
+    assert move("b", db, key, 'e8', 'f7') is not None
+    assert move("w", db, key, 'f1', 'c4') is not None
+    assert move("w", db, key, 'c4', 'f7') is not None
 
     assert board.ascii == "rnbq.bnr\n" \
                                "pppppBpp\n" \
@@ -452,6 +498,7 @@ def test_game_winner_capture(db, key):
     assert board.kings[BLACK] == None
     print(board.kings)
     assert board.winner == WHITE
+    assert board.state ==W_WINS
 
 def test_board_clear(db, key):
     board = create_game_from_nfen(db, 0, key, exp=5000)
@@ -463,19 +510,26 @@ def test_board_clear(db, key):
 
 def test_board_move_number_updates(db, key):
     board = create_game_from_nfen(db, 0, key, exp=5000)
+    board.set_white("w")
+    board.set_black("b")
     assert board.move_number == 1
-    assert move(db, key, 'e2', 'e4') is not None
+    assert move("w", db, key, 'e2', 'e4') is not None
     assert board.move_number == 2
 
 def test_board_to_dict(db, key):
     board = create_game_from_nfen(db, 1000, key, exp=5000)
+    board.set_white("w")
+    board.set_black("b")
     d = to_dict(db, key)
+    assert d["white"] == "w"
+    assert d["black"] == "b"
+    assert d["state"] == PLAYING
     assert d["current_time"] >= d["start_time"]
     assert d["cd"] == 1000
     assert d["nfen"] == "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR KQkq 1"
     assert not d["times"]
     
-    assert move(db, key, 'e2', 'e4') is not None
+    assert move("w", db, key, 'e2', 'e4') is not None
     d = to_dict(db, key)
     assert 'e4' in d["times"]
     assert len(d['times'].keys()) == 1

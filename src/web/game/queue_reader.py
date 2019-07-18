@@ -43,11 +43,13 @@ def poll_game_cnfs(db, game_cnfs_queue, socketio):
                 namespace="/game")
             else:
                 socketio.emit('move-cnf',
-                {'result': SUCCESS, 'move': data},
+                {'result': SUCCESS, 'move': data["move"]},
                  room=game_id,
                  namespace="/game")
+        elif cmd == "game-cnf":
+            pass
         elif cmd == "error-ind":
             #TODO: Add proper logging instead of total collapse
-            raise Exception("Error ind received!! {}".format(data))
+            print("Error ind recieved!! {}".format(data))
 
 

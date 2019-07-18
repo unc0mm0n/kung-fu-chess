@@ -17,6 +17,16 @@ def init_game(i_app, i_socketio):
 
     _t = i_socketio.start_background_task(queue_reader.poll_game_cnfs, _game_redis, get_cnfs_queue(), i_socketio)
 
+def next_game_id():
+    key = "{}:games:game_id".format(_app.config["REDIS_STORE_KEY"])
+    cid = _game_redis.get(key)
+    print(cid)
+    if not cid:
+        cid = 0
+    cid = int(cid) + 1
+    _game_redis.set(key, cid)
+    return cid
+
 def get_app():
     return _app
 

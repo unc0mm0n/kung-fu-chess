@@ -26,9 +26,16 @@ PIECES = [KING, QUEEN, ROOK, KNIGHT, BISHOP, PAWN]
 # colors
 BLACK = 'b'
 WHITE = 'w'
+EMPTY = 'e'
 
 COLORS = [BLACK, WHITE]
 
+WAITING = "waiting"
+PLAYING = "playing"
+W_WINS = "w_wins"
+B_WINS = "b_wins"
+
+STATES = [WAITING, PLAYING, W_WINS, B_WINS]
 
 class Piece():
     """ basic  representation of piece"""
@@ -290,11 +297,17 @@ class RedisKungFuBoard(KungFuBoard):
             self._db.pexpire(self._store_key, self._exp)
         try:
             san = sq.san
-        except AttributeError:  # maybe int index
-            san = Square(sq).san
+        except AttributeError:
+            print(sq)
+            try:
+                san = Square(sq).san
+            except:
+                pass
+
+
         res = self._db.hget(self._store_key, san)
         if res is None:
-            raise ValueError("invalid sq {}".format(sq))
+            return Piece(EMPTY, EMPTY, 0)
         return Piece(**json.loads(res))
 
     def _pexpire(self):
@@ -375,8 +388,24 @@ class RedisKungFuBoard(KungFuBoard):
         self.inc_move_number()
         return piece
 
-    def set_player(self, color, name):
-        self._set(color, name)
+    def set_black(self, name):
+        if self.black is not None:
+            raise Exception("Reassignment of black player!")
+        self._set(BLACK, name)
+        if self.white is not None:
+            self.set_state(PLAYING)
+
+    def set_white(self, name):
+        if self.white is not None:
+            raise Exception("Reassignment of white player!")
+        self._set(WHITE, name)
+        if self.black is not None:
+            self.set_state(PLAYING)
+
+    def set_state(self, new_state):
+        if new_state not in STATES:
+            raise ValueError("Invalid assignment to state {}".format(new_state))
+        self._set("state", new_state)
 
     def set_start_time(self, time):
         self._set("start_time", time)
@@ -508,11 +537,23 @@ class RedisKungFuBoard(KungFuBoard):
 
     @property
     def white(self):
-        return self._get("white")
+        return self._get(WHITE)
 
     @property
     def black(self):
-        return self._get("black")
+        return self._get(BLACK)
+
+    @property
+    def state(self):
+        return self._get("state")
+
+    def get_player(self, color):
+        if color == WHITE:
+            return self.white
+        elif color == BLACK:
+            return self.black
+        else:
+            raise ValueError("invalid value for get_player")
 
 @property
 def game_winner(db, store_key):
@@ -524,11 +565,8 @@ def game_winner(db, store_key):
         return WHITE
     return EMPTY
 
-@property
-def is_over(self):
-    return self.winner != EMPTY
-
-
+def get_board(db, store_key):
+    return RedisKungFuBoard(db, store_key)
 
 def moves(db, store_key, san_sq):
     """ Return a list of all possible moves from san_sq """
@@ -588,18 +626,29 @@ def moves(db, store_key, san_sq):
 
     return moves
 
-def move(db, store_key, san_from_sq, san_to_sq, promote=None):
+def move(player, db, store_key, san_from_sq, san_to_sq, promote=None):
     """ Make a move from san_from_sq to san_to_sq, Return the move if
     it was made, or None otherwise. """
-    from_sq = Square.FromSan(san_from_sq)
-    to_sq = Square.FromSan(san_to_sq)
+    try:
+        from_sq = Square.FromSan(san_from_sq)
+        to_sq = Square.FromSan(san_to_sq)
+    except:
+        return None
 
     if not from_sq.valid or not to_sq.valid:
         return None
 
     board = RedisKungFuBoard(db, store_key)
 
+    if board.state != PLAYING:
+        print("bad state")
+        return None
+
     piece = board[from_sq]
+    if piece.type == EMPTY or board.get_player(piece.color) != player:
+        print(from_sq, piece)
+        return None
+
     o_piece = board[to_sq]
 
     for move in moves(db, store_key, san_from_sq):
@@ -637,7 +686,11 @@ def move(db, store_key, san_from_sq, san_to_sq, promote=None):
 
             move._metadata[Move.TIME] = relative_move_time
 
-            return move
+            if board.winner == WHITE:
+                board.set_state(W_WINS)
+            elif board.winner == BLACK:
+                board.set_state(B_WINS)
+            return move, board.state
 
 def to_dict(db, store_key):
     """ Return a dictionary representing the game """
@@ -645,6 +698,9 @@ def to_dict(db, store_key):
     res = {
         "cd": board.cd,
         "history": None, #TODO,
+        "white": board.white,
+        "black": board.black,
+        "state": board.state,
         "current_time": now(),
         "start_time":   board.start_time,
         "nfen": "{} {} {}".format(board.fen, board.castles, board.move_number),
@@ -714,6 +770,8 @@ def create_game_from_nfen(db, cd, store_key, *, exp=None, nfen=None):
     board.set_move_number(int(move_num))
     board.set_start_time(now())
     board.set_castles(castles)
+
+    board.set_state(WAITING) # for player assigment
 
     kings = board.get_all_pieces(type=KING)
     if len(kings) >= 3 or len(kings) == 0:

@@ -19,14 +19,16 @@ import kfchess.game as kfc
 
 class RedisGamesManager():
     """ Manage games using redis queue for incoming and outgoing messages """
-    def __init__(self, redis_db, in_queue, out_queue):
+    def __init__(self, redis_db, in_queue, out_queue, key_base_suffix=None):
         """ initialize a games manager.
 
         This object runs new kfchess games in processes, relaying messages to them through redis.
-        By default all responses from the manager go out to a single queue, but a different queue
+        By default all respodatao a single queue, but a different queue
         per process (game) can also be submitted. """
+        if not key_base_suffix:
+            key_base_suffix = str(uuid4())
         self._db  = redis_db
-        self._key_base = "manager:{}".format(uuid4())
+        self._key_base = "manager:{}".format(key_base_suffix)
         self._out = out_queue
         self._in  = in_queue
 
@@ -40,7 +42,7 @@ class RedisGamesManager():
             _, out = db.blpop(in_q)
             try:
                 game_id, player_id, cmd, data = json.loads(out)
-                game_key = self._game_key_from_id(game_id)
+                game_key = self.game_key_from_id(game_id)
                 print("[{}, {}] responding to {}, data={}".format(game_id, player_id, cmd, data))
                 if cmd == "game-req":
                     if not db.exists(game_key):
@@ -48,19 +50,20 @@ class RedisGamesManager():
                                                       cd = data["cd"],
                                                       store_key=game_key,
                                                       nfen = data.get("nfen", None),
-                                                      exp=data.get("exp", None))
-                        board.set_player("white", player_id)
+                                                      exp=data.get("exp", 3600))
+                        board.set_white(player_id)
+                        self._db.rpush(self._out, json.dumps([game_id, player_id, "game-cnf", {"state": board.state,
+                                                                                               "store_key": game_key}]))
                     else:
-                        board = kfc.RedisKungFuBoard(self._db, game_key)
-                        if board.black is None:
-                            board.set_player("black", player_id)
-                    self._db.rpush(self._out, json.dumps([game_id, player_id, "game-cnf", {"in_queue": in_q,
-                                                                       "store_key": game_key}]))
+                        self._db.rpush(self._out, json.dumps([game_id, player_id, "game-cnf", None]))
                 elif cmd == "join-req":
                     if not db.exists(game_key):
-                        self._db.rpush(self._out, json.dumps([game_id, player_id, "game-cnf", None]))
+                        self._db.rpush(self._out, json.dumps([game_id, player_id, "join-cnf", None]))
                     else:
-                        self._db.rpush(self._out, json.dumps([game_id, player_id, "game-cnf", {"in_queue": in_q,
+                        board = kfc.get_board(db, game_key)
+                        if board.black is None:
+                            board.set_black(player_id)
+                        self._db.rpush(self._out, json.dumps([game_id, player_id, "join-cnf", {"state": board.state,
                                                                        "store_key": game_key}]))
                 elif cmd == "exit-req":
                     print("exit-req received")
@@ -71,7 +74,7 @@ class RedisGamesManager():
                 elif cmd == "move-req":
                     res = None
                     try:
-                        res = kfc.move(db, game_key, data['from'], data['to'], data.get('promote'))
+                        res = kfc.move(player_id, db, game_key, data['from'], data['to'], data.get('promote'))
                     except KeyError:
                         print("Invalid move!")
                     db.rpush(out_q, prepare_move_cnf(res, game_id, player_id))
@@ -90,7 +93,7 @@ class RedisGamesManager():
                 self._db.rpush(self._out, prepare_error_ind(reason="exception", exc=ex))
                 cmd = None
 
-    def _game_key_from_id(self, game_id):
+    def game_key_from_id(self, game_id):
         return "{}:games:{}".format(self._key_base, game_id)
 
 
@@ -98,21 +101,24 @@ def run_game_manager(db, in_q, out_q):
     game_manager = RedisGamesManager(db, in_q, out_q)
     game_manager.run()
 
-def prepare_move_cnf(move, game_id, player_id):
+def prepare_move_cnf(move_state, game_id, player_id):
     """ Prepare json for a move command response. """
-    if move is not None:
+    data = None
+    if move_state != None:
+        move, state = move_state
         move =  {
                 "from":    move.from_sq.san,
                 "to":      move.to_sq.san,
                 "promote": move.promote,
                 "time":    move.time
                 }
-    return json.dumps([game_id, player_id, 'move-cnf', move])
+        data = {"state": state, "move": move}
+    return json.dumps([game_id, player_id, 'move-cnf', data])
 
 def prepare_sync_cnf(game_id, player_id, db, store_key):
     """ Prepare json for a sync command response. """
     try:
-        board = kfc.RedisKungFuBoard(db, store_key)
+        board = kfc.get_board(db, store_key)
         res = json.dumps([game_id, player_id, 'sync-cnf', 
             {'board': kfc.to_dict(db, store_key),
             'white': board.white,

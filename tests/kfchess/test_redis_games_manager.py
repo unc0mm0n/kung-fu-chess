@@ -28,18 +28,20 @@ def out_q():
 
 @pytest.fixture
 def rgm(db, in_q, out_q):
+    suffix = uuid.uuid4()
+    prefix="manager:{}:".format(suffix) + "games:{}"
     print("******", db, in_q, out_q)
-    rgm = RedisGamesManager(db, in_q, out_q)
+    rgm = RedisGamesManager(db, in_q, out_q, key_base_suffix=suffix)
     p = Process(target=rgm.run)
-    p.daemon = False
+    p.daemon = True
     p.start()
-    yield (db, in_q, out_q)
+    yield (db, in_q, out_q, prefix)
     db.rpush(in_q, json.dumps([-1, -1, "exit-req", None]))
     try:
         _, res  = db.blpop(out_q, 1)
     except:
         pass
-    p.join(1)
+    #p.join(2)
     db.pexpire(in_q, 0)
 
 @pytest.fixture
@@ -47,7 +49,7 @@ def game_id():
     return random.randint(1,999999999999999)
 
 def test_manage_game_quits(rgm):
-    db, in_q, out_q = rgm
+    db, in_q, out_q, prefix = rgm
     db.rpush(in_q, json.dumps([-1, -1, "exit-req", None]))
     _, res  = db.blpop(out_q, 1)
     print(res)
@@ -56,7 +58,7 @@ def test_manage_game_quits(rgm):
     assert r == "exit-cnf"
 
 def test_manage_game_cmd_game_req(rgm, game_id):
-    db, in_q, out_q = rgm
+    db, in_q, out_q, prefix = rgm
 
     db.rpush(in_q, json.dumps([game_id, 0, "game-req", {"cd": 1000}]))
     _, res  = db.blpop(out_q, 1)
@@ -67,7 +69,7 @@ def test_manage_game_cmd_game_req(rgm, game_id):
     assert i == game_id
 
 def test_manage_game_invalid_commands(rgm, game_id):
-    db, in_q, out_q = rgm
+    db, in_q, out_q, prefix = rgm
 
     db.rpush(in_q, json.dumps([game_id, 0, "game_req", {"cd": 1000}]))
     _, res  = db.blpop(out_q, 1)
@@ -112,13 +114,15 @@ def test_manage_game_invalid_commands(rgm, game_id):
     assert r == "error-ind"
 
 def test_manage_game_make_move(rgm, game_id):
-    db, in_q, out_q = rgm
+    db, in_q, out_q, prefix = rgm
 
     db.rpush(in_q, json.dumps([game_id, 0, "game-req", {"cd": 1000}]))
-    _, res  = db.blpop(out_q, 1)
-    _, _, r, d = json.loads(res)
-    g_in_q = d["in_queue"]
-    db.rpush(g_in_q, json.dumps([game_id, 0, "move-req", {"from": "e2", "to": "e4"}]))
+    db.rpush(in_q, json.dumps([game_id, 1, "join-req", {"cd": 1000}]))
+
+    _, res = db.blpop(out_q, 1)
+    _, res = db.blpop(out_q, 1)
+
+    db.rpush(in_q, json.dumps([game_id, 0, "move-req", {"from": "e2", "to": "e4"}]))
     _, res = db.blpop(out_q, 1)
     res = json.loads(res)
     assert len(res) == 4
@@ -126,14 +130,23 @@ def test_manage_game_make_move(rgm, game_id):
     assert res[2] == "move-cnf"
 
 def test_manage_game_make_move_illegal(rgm, game_id):
-    db, in_q, out_q = rgm
+    db, in_q, out_q, prefix = rgm
 
     db.rpush(in_q, json.dumps([game_id, 0, "game-req", {"cd": 1000}]))
+    db.rpush(in_q, json.dumps([game_id, 1, "join-req", {"cd": 1000}]))
     _, res  = db.blpop(out_q, 1)
+    _, res  = db.blpop(out_q, 1)
+
+    db.rpush(in_q, json.dumps([game_id, 0, "move-req", {"from": "e2", "to": "e1"}]))
+    _, res = db.blpop(out_q, 1)
+    res = json.loads(res)
     print(res)
-    _, _, r, d = json.loads(res)
-    g_in_q = d["in_queue"]
-    db.rpush(g_in_q, json.dumps([game_id, 0, "move-req", {"from": "e2", "to": "e1"}]))
+    assert len(res) == 4
+    assert res[0] == game_id
+    assert res[2] == "move-cnf"
+    assert res[3] == None
+    
+    db.rpush(in_q, json.dumps([game_id, 1, "move-req", {"from": "e2", "to": "e4"}]))
     _, res = db.blpop(out_q, 1)
     res = json.loads(res)
     assert len(res) == 4
@@ -142,15 +155,14 @@ def test_manage_game_make_move_illegal(rgm, game_id):
     assert res[3] == None
 
 def test_manage_game_sync_req(rgm, game_id):
-    db, in_q, out_q = rgm
+    db, in_q, out_q, prefix = rgm
 
     db.rpush(in_q, json.dumps([game_id, 0, "game-req", {"cd": 1000}]))
+    db.rpush(in_q, json.dumps([game_id, 1, "join-req", {"cd": 1000}]))
     _, res  = db.blpop(out_q, 1)
-    print(res)
-    _, _, r, d = json.loads(res)
-    g_in_q = d["in_queue"]
+    _, res  = db.blpop(out_q, 1)
 
-    db.rpush(g_in_q, json.dumps([game_id, 0, "sync-req", None]))
+    db.rpush(in_q, json.dumps([game_id, 0, "sync-req", None]))
     _, res = db.blpop(out_q, 1)
     res = json.loads(res)
     print(res)
@@ -159,10 +171,10 @@ def test_manage_game_sync_req(rgm, game_id):
     assert res[2] == "sync-cnf"
     assert not res[3]["board"]["times"]
 
-    db.rpush(g_in_q, json.dumps([game_id, 0, "move-req", {"from": "e2", "to": "e4"}]))
+    db.rpush(in_q, json.dumps([game_id, 0, "move-req", {"from": "e2", "to": "e4"}]))
     db.blpop(out_q, 1)
 
-    db.rpush(g_in_q, json.dumps([game_id, 0, "sync-req", None]))
+    db.rpush(in_q, json.dumps([game_id, 0, "sync-req", None]))
     _, res = db.blpop(out_q, 1)
     res = json.loads(res)
     assert len(res) == 4
@@ -171,115 +183,82 @@ def test_manage_game_sync_req(rgm, game_id):
     assert "e4" in res[3]["board"]["times"]
 
 
-    db.rpush(g_in_q, json.dumps([game_id-1, 0, "sync-req", None]))
+    db.rpush(in_q, json.dumps([game_id-1, 0, "sync-req", None]))
     _, res = db.blpop(out_q, 1)
     res = json.loads(res)
     print(res)
     assert len(res) == 4
     assert res[0] == game_id-1
-    assert res[2] == "error-ind"
+    assert res[2] == "sync-cnf"
+    assert res[3] == None
 
     db.rpush(in_q, json.dumps(["exit-req", None]))
 
-"""
-def test_manage_game_correct_response_to_exit():
-    rgm = RedisGamesManager(redis_db, out_q)
-    kfc = KungFuChess.FromNfen(0, **gen_nfen_args())
-    in_q = "in:{}".format(uuid.uuid4())
-    rgm.manage_game(kfc, 1, 0, 1, in_q)
-    redis_db.rpush(in_q, json.dumps([1, "exit-req", None]))
-    _, resp = redis_db.blpop(out_q, timeout=1)
-    gid, cmd, data = json.loads(resp)
-    assert redis_db.llen(in_q) == 0
-    assert redis_db.llen(out_q) == 0
-    assert gid == 1
-    assert cmd == "exit-cnf"
-    assert data is None
-    time.sleep(0.1)  # for obvious reasons, exit happens after cnf
-    assert not rgm._p[0].is_alive()
+def test_manage_game_correct_response_to_move(game_id, rgm):
+    db, in_q, out_q, prefix = rgm
 
-def test_manage_game_reads_and_responds_to_move():
-    rgm = RedisGamesManager(redis_db, out_q)
-    kfc = KungFuChess.FromNfen(0, **gen_nfen_args())
-    in_q = "in:{}".format(uuid.uuid4())
-    rgm.manage_game(kfc, 1, 0, 1, in_q)
-    redis_db.rpush(in_q, json.dumps([1, "move-req", [1, {"from": 3,
-                                "to": 2}]]))
-    time.sleep(0.1)
-    assert redis_db.llen(in_q) == 0
-    assert redis_db.llen(out_q) == 1
-    redis_db.expire(out_q, 0)
-    rgm._p[0].terminate()
+    db.rpush(in_q, json.dumps([game_id, 0, "game-req", {"cd": 1000}]))
+    db.rpush(in_q, json.dumps([game_id, 1, "join-req", {"cd": 1000}]))
 
-def test_manage_game_correct_response_to_move():
-    rgm = RedisGamesManager(redis_db, out_q)
-    kfc = KungFuChess.FromNfen(0, **gen_nfen_args())
-    in_q = "in:{}".format(uuid.uuid4())
-    rgm.manage_game(kfc, 1, 0, 1, in_q)
+    print(prefix.format(game_id))
+    kfc = get_board(db, prefix.format(game_id))
+    _, res  = db.blpop(out_q, 1)
+    _, res  = db.blpop(out_q, 1)
 
     # Test legal moves
     moves = [(0, 'e2', 'e4', PAWN), (1, 'e7', 'e5', PAWN), (0,'f1', 'c4', BISHOP), (0, 'g1', 'f3', KNIGHT), (0, 'e1', 'g1', KING)]
     for player, fr, to, piece in moves:
-        redis_db.rpush(in_q, json.dumps([1, "move-req", [player, {"from": fr,
-                                    "to": to}]]))
-    for player, fr, to, piece in moves:
-        _, resp = redis_db.blpop(out_q, timeout=1)
+        db.rpush(in_q, json.dumps([game_id, player, "move-req", {"from": fr,
+                                    "to": to}]))
+        _, resp = db.blpop(out_q, timeout=1)
         print(resp)
         assert resp is not None
-        gid, cmd, data = json.loads(resp)
-        assert gid == 1
+        gid, pid, cmd, data = json.loads(resp)
+        assert gid == game_id
+        assert pid == player
         assert cmd == "move-cnf"
         assert data is not None
 
-        player_id, move = data
-        assert player_id == player
+        state = data["state"]
+        move = data["move"]
+        assert state == PLAYING
         assert "from" in move and "to" in move and "time" in move and "promote" in move
         assert move["from"] == fr and move["to"] == to
-        assert kfc[fr].type == EMPTY
-        assert kfc[to].type == piece
-        assert kfc[to].color == WHITE if player == 0 else BLACK
-    assert redis_db.llen(out_q) == 0
+        print(fr, to)
+        print(kfc.ascii)
+        assert kfc[Square.FromSan(fr)].type == EMPTY
+        assert kfc[Square.FromSan(to)].type == piece
+        assert kfc[Square.FromSan(to)].color == WHITE if player == 0 else BLACK
+    assert db.llen(out_q) == 0
 
     # Test illegal moves
-    moves = [(0, 'e4', 'e3', PAWN, EMPTY), (1, 'e5', 'e4', PAWN, PAWN), (1,'c4', 'c5', BISHOP, EMPTY), (1, 'f3', 'g1', KNIGHT, KING), (0, 'f3', 'g1', KNIGHT, KING), (1, 'f3', 'h4', KNIGHT, EMPTY)]
+    moves = [(0, 'e4', 'e3', PAWN, EMPTY), (1, 'e5', 'e4', PAWN, PAWN), (1,'c4', 'c5', BISHOP, EMPTY), (1, 'f3', 'g1', KNIGHT, KING), (0, 'f3', 'g1', KNIGHT, KING), (1, 'f3', 'h4', KNIGHT, EMPTY), (1, 'e4', 'e5', PAWN, PAWN)]
     for player, fr, to, piece, to_piece in moves:
-        redis_db.rpush(in_q, json.dumps([1, "move-req", [player, {"from": fr,
-                                    "to": to}]]))
-        _, resp = redis_db.blpop(out_q, timeout=1)
-        print(resp)
+        db.rpush(in_q, json.dumps([game_id, player, "move-req", {"from": fr,
+                                    "to": to}]))
+        _, resp = db.blpop(out_q, timeout=1)
         assert resp is not None
-        gid, cmd, data = json.loads(resp)
-        assert gid == 1
+        gid, pid, cmd, data = json.loads(resp)
+        assert gid == game_id
+        assert pid == player
         assert cmd == "move-cnf"
-        assert data is not None
+        assert data is None
 
-        player_id, move = data
-        assert player_id == player
-        assert move is None
-        assert kfc[fr].type == piece
-        assert kfc[to].type == to_piece
-    assert redis_db.llen(out_q) == 0
+    assert db.llen(out_q) == 0
 
     # crazier illegal moves
     sqs = [None, 'a', 'a1', 'e2', -1, 8, 9, '4e', '44', '4', 91987849237498236597123, 'e2e4']
-    moves = list(itertools.product((0,1), sqs, sqs))
-    ascii = kfc._board.ascii
+    moves = list(itertools.product((0,1,2), sqs, sqs))
     for p, f, t in moves:
-        redis_db.rpush(in_q, json.dumps([1, "move-req", [p, {"from": f, "to": t}]]))
-    for p, f, t in moves:
-        _, resp = redis_db.blpop(out_q, timeout=1)
+        print(p, f, t)
+        db.rpush(in_q, json.dumps([game_id, p, "move-req", {"from": f, "to": t}]))
+        _, resp = db.blpop(out_q, timeout=1)
         assert resp is not None
-        gid, cmd, data = json.loads(resp)
-        assert gid == 1
+        print(resp)
+        gid, pid, cmd, data = json.loads(resp)
+        assert gid == game_id
+        assert pid == p
         assert cmd == "move-cnf"
-        assert data is not None
+        assert data is None
 
-        player_id, move = data
-        assert player_id == p
-        assert move is None
-    assert redis_db.llen(out_q) == 0
-    assert ascii == kfc._board.ascii  # make sure board wasn't changed
-    # Test illegal moves
-    redis_db.expire(out_q, 0)
-    rgm._p[0].terminate()
- """
+    assert db.llen(out_q) == 0
