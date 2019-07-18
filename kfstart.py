@@ -1,4 +1,4 @@
-from src.web import create_app, socketio
+from web import create_app, socketio
 
 app = create_app()
 

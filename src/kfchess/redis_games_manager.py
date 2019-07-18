@@ -42,6 +42,7 @@ class RedisGamesManager():
             try:
                 game_id, player_id, cmd, data = json.loads(out)
                 game_key = self._game_key_from_id(game_id)
+                print("[{}, {}] {} request".format(game_id, player_id, cmd))
                 if cmd == "game-req":
                     if not db.exists(game_key):
                         board = kfc.create_game_from_nfen(db = self._db,
@@ -50,12 +51,10 @@ class RedisGamesManager():
                                                       nfen = data.get("nfen", None),
                                                       exp=data.get("exp", None))
                         board.set_player("white", player_id)
-                        print(board.white, board.black)
                     else:
                         board = kfc.RedisKungFuBoard(self._db, game_key)
                         if board.black is None:
                             board.set_player("black", player_id)
-                        print(board.white, board.black)
                     self._db.rpush(self._out, json.dumps([game_id, player_id, "game-cnf", {"in_queue": in_q,
                                                                        "store_key": game_key}]))
                 elif cmd == "join-req":
@@ -115,7 +114,6 @@ def prepare_sync_cnf(game_id, player_id, db, store_key):
             {'board': kfc.to_dict(db, store_key),
             'white': board.white,
             'black': board.black}])
-        print("cnf = {}".format(res))
         return res
     except ValueError as e:
         return prepare_error_ind(game_id, player_id, reason=repr(e))

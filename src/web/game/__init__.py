@@ -1,4 +1,3 @@
-from threading import Thread
 import json
 
 import redis
@@ -16,10 +15,7 @@ def init_game(i_app, i_socketio):
     _game_redis = redis.StrictRedis(host=_app.config["REDIS_HOSTNAME"],
                                    port=_app.config["REDIS_PORT"])
 
-    _t = Thread(target=queue_reader.poll_game_cnfs, args=(_game_redis, get_cnfs_queue(), i_socketio))
-    _t.daemon = True
-    _t.start()
-
+    _t = i_socketio.start_background_task(queue_reader.poll_game_cnfs, _game_redis, get_cnfs_queue(), i_socketio)
 
 def get_app():
     return _app

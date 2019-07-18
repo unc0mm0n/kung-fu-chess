@@ -103,7 +103,6 @@ $(window).ready(function() {
 
     socket.on('move-cnf', function(move_desc) {
 
-      console.log(move_desc)
       if (move_desc['result'] == 'fail') { // move was illegal, update board and ask for resync
         console.log('illegal move response received');
         socket.emit("sync-req", game_id);
@@ -119,6 +118,7 @@ $(window).ready(function() {
         cd: cd,
         time: move_desc.time
       });
+
       if (res === null)
       {
         console.log("Invalid move received, requesting sync");
@@ -131,6 +131,7 @@ $(window).ready(function() {
         window.location = "/";
       }
 
+     console.log(res)
       var changes = board.position(game.nfen());
       for (var i = 0; i < changes.length; i++) {
         disableSquare(changes[i].destination, cd, move.time);

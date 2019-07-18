@@ -1,3 +1,7 @@
+
+import eventlet
+eventlet.monkey_patch()
+
 import os
 from flask import Flask
 from flask_socketio import SocketIO
@@ -14,8 +18,8 @@ def create_app():
     else:
         print("KFCHESS_CONFIG envvar is not present, using default config")
 
-    if not app.config["TESTING"]:
-        socketio.init_app(app)
+    #if not app.config["TESTING"]:
+    socketio.init_app(app)
     # this weird local import on create seems to be necessitated by flask-socketio's lack of support of blueprints
     from web.main import main
     app.register_blueprint(main, url_prefix='/')
