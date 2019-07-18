@@ -1,12 +1,22 @@
+import json
+
 import flask
 from flask_login import login_user
 
 from web.main import main
 from web.main.user import User
+from web.game import get_active_game_set, get_waiting_game_set
+
 
 @main.route('/')
 def index():
-    return flask.render_template("main_page.html", games = [1,2,3])
+    db = flask.current_app.redis
+    active_games =  db.smembers(get_active_game_set())
+    waiting_games = db.smembers(get_waiting_game_set())
+    print(active_games)
+    print(waiting_games)
+    return flask.render_template("main_page.html", a_games=map(json.loads, active_games)
+                                                 , w_games=map(json.loads, waiting_games))
 
 @main.route('/login')
 def login():

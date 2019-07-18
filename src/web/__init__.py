@@ -1,8 +1,9 @@
+import os
 
+import redis
 import eventlet
 eventlet.monkey_patch()
 
-import os
 from flask import Flask
 
 from flask_socketio import SocketIO
@@ -22,6 +23,9 @@ def create_app():
         print("Using redis at: {}:{}".format(app.config["REDIS_HOSTNAME"], app.config["REDIS_PORT"]))
     else:
         print("KFCHESS_CONFIG envvar is not present, using default config")
+
+    app.redis = redis.StrictRedis(host=app.config["REDIS_HOSTNAME"],
+                                  port=app.config["REDIS_PORT"])
 
     socketio.init_app(app)
     login_manager.init_app(app)

@@ -11,8 +11,7 @@ import redis
 FAIL = 'fail'
 SUCCESS = 'success'
 
-
-def poll_game_cnfs(db, game_cnfs_queue, socketio):
+def poll_game_cnfs(db, redis_game_store, game_cnfs_queue, socketio):
     """ Poll a given response queue in redis object for new responses,
     emitting them to players as necessary."""
     while True:
@@ -25,6 +24,7 @@ def poll_game_cnfs(db, game_cnfs_queue, socketio):
                               room=player_id,
                               namespace="/game")
             else:
+                print("Dealing with conf", player_id, data)
                 color = "o"
                 if player_id == data["white"]:
                     color = "w"
@@ -47,10 +47,19 @@ def poll_game_cnfs(db, game_cnfs_queue, socketio):
                 {'result': SUCCESS, 'move': data["move"]},
                  room=game_id,
                  namespace="/game")
+                if data["state"] != "playing":
+                    #TODO store in permanent db
+                    db.srem("{}:playing".format(redis_game_store), game_id)
         elif cmd == "game-cnf":
-            pass
+            if data != None:
+                print("Setting game waiting: {} {}".format(game_id, game_id), data)
+                db.sadd("{}:{}".format(redis_game_store, data["state"]), game_id)
+        elif cmd == "join-cnf":
+            if data != None and db.sismember("{}:waiting".format(redis_game_store), game_id):
+                print("Setting game active: {} {}".format(game_id, game_id), data)
+                db.srem("{}:waitig".format(redis_game_store), game_id)
+                db.sadd("{}:{}".format(redis_game_store, data["state"]), game_id)
         elif cmd == "error-ind":
-            #TODO: Add proper logging instead of total collapse
+            #TODO: Add proper logging instead of total collapse 
             print("Error ind recieved!! {}".format(data))
-
 

@@ -7,7 +7,12 @@ Home
 {% block page_content %}
 <h2 id="content-title">Current games:</h2>
     <div><a href="/game">New game</a></div>
-    {% for key in games %}
+    <h3 id=content-title> Games waiting for opponent </h3>
+    {% for key in w_games %}
+        <div><a href="/game/{{key}}">{{key}}</a></div>
+    {% endfor %}
+    <h3 id=content-title> Active Games </h3>
+    {% for key in a_games %}
         <div><a href="/game/{{key}}">{{key}}</a></div>
     {% endfor %}
 

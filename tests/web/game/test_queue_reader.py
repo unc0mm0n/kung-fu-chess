@@ -32,7 +32,7 @@ def env():
     # start polling thread
     game_resps_q = "resps:{}".format(uuid.uuid4())
     redis_db     = redis.StrictRedis()  #Todo: take redis from some configs
-    t = Thread(target=poll_game_cnfs, args=(redis_db, game_resps_q, socketio))
+    t = Thread(target=poll_game_cnfs, args=(redis_db, "test_store", game_resps_q, socketio))
     t.daemon = True
     t.start()
     yield Env(app=app, socketio=socketio, q=game_resps_q, db=redis_db)

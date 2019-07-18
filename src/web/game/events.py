@@ -26,7 +26,6 @@ def handle_game_move(game_id, move_json):
     if current_user.is_authenticated:
         sid = current_user.get_id()
         send_move_req(game_id, sid, move_json)
-    emit("ind", "km")
 
 @socketio.on('join-req', namespace='/game')
 def handle_join_req(game_id):
@@ -40,8 +39,8 @@ def handle_join_req(game_id):
 @socketio.on('sync-req', namespace='/game')
 def handle_sync_req(game_id):
     """ ask to be synced about the state of the game """
-    send_sync_req(game_id, request.sid)
-    emit("ind", "ks")
+    sid = current_user.get_id() if current_user.is_authenticated else request.sid
+    send_sync_req(game_id, sid)
 
 @socketio.on('connect')
 def handle_connect():

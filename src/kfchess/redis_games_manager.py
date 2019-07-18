@@ -46,11 +46,12 @@ class RedisGamesManager():
                 print("[{}, {}] responding to {}, data={}".format(game_id, player_id, cmd, data))
                 if cmd == "game-req":
                     if not db.exists(game_key):
+                        print("creating game with exp={}".format(data.get("exp")))
                         board = kfc.create_game_from_nfen(db = self._db,
                                                       cd = data["cd"],
                                                       store_key=game_key,
                                                       nfen = data.get("nfen", None),
-                                                      exp=data.get("exp", 3600))
+                                                      exp=data.get("exp", 3600000))
                         board.set_white(player_id)
                         self._db.rpush(self._out, json.dumps([game_id, player_id, "game-cnf", {"state": board.state,
                                                                                                "store_key": game_key}]))
@@ -61,7 +62,7 @@ class RedisGamesManager():
                         self._db.rpush(self._out, json.dumps([game_id, player_id, "join-cnf", None]))
                     else:
                         board = kfc.get_board(db, game_key)
-                        if board.black is None:
+                        if board.white != player_id and board.black is None:
                             board.set_black(player_id)
                         self._db.rpush(self._out, json.dumps([game_id, player_id, "join-cnf", {"state": board.state,
                                                                        "store_key": game_key}]))
