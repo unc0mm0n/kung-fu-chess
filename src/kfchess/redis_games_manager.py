@@ -40,7 +40,7 @@ class RedisGamesManager():
         while not done:
             _, out = db.blpop(in_q)
             try:
-                game_id, cmd, data = json.loads(out)
+                game_id, player_id, cmd, data = json.loads(out)
                 game_key = self._game_key_from_id(game_id)
                 if cmd == "game-req":
                     if not db.exists(game_key):
@@ -49,15 +49,18 @@ class RedisGamesManager():
                                                       store_key=game_key,
                                                       nfen = data.get("nfen", None),
                                                       exp=data.get("exp", None))
-
-                    self._db.rpush(self._out, json.dumps([game_id, "game-cnf", {"in_queue": in_q,
+                        board.set_player("white", player_id)
+                        print(board.white, board.black)
+                    else:
+                        board = kfc.RedisKungFuBoard(self._db, game_key)
+                        if board.black is None:
+                            board.set_player("black", player_id)
+                        print(board.white, board.black)
+                    self._db.rpush(self._out, json.dumps([game_id, player_id, "game-cnf", {"in_queue": in_q,
                                                                        "store_key": game_key}]))
                 elif cmd == "join-req":
-                    if not db.exists(game_key):
-                        self._db.rpush(self._out, json.dumps([game_id, "join-cnf", None])
-                    else:
-                        #todo: see if color is open, if yes return color otherwise return observer.
-                        self._db.rpush(self._out, json.dumps([game_id, "join-cnf", {"color": "observer"}),
+                    self._db.rpush(self._out, json.dumps([game_id, player_id, "game-cnf", {"in_queue": in_q,
+                                                                       "store_key": game_key}]))
                 elif cmd == "exit-req":
                     print("exit-req received")
 
@@ -71,10 +74,10 @@ class RedisGamesManager():
                         res = kfc.move(db, game_key, data['from'], data['to'], data.get('promote'))
                     except KeyError:
                         print("Invalid move!")
-                    db.rpush(out_q, prepare_move_cnf(res, game_id))
+                    db.rpush(out_q, prepare_move_cnf(res, game_id, player_id))
                     db.expire(out_q, 3600)
                 elif cmd == "sync-req":
-                    db.rpush(out_q, prepare_sync_cnf(game_id, db, self._game_key_from_id(game_id)))
+                    db.rpush(out_q, prepare_sync_cnf(game_id, player_id, db, self._game_key_from_id(game_id)))
                     db.expire(out_q, 3600)
                 else:
                     print("Unknown command {}".format(cmd))
@@ -93,7 +96,7 @@ def run_game_manager(db, in_q, out_q):
     game_manager = RedisGamesManager(db, in_q, out_q)
     game_manager.run()
 
-def prepare_move_cnf(move, game_id):
+def prepare_move_cnf(move, game_id, player_id):
     """ Prepare json for a move command response. """
     if move is not None:
         move =  {
@@ -102,22 +105,28 @@ def prepare_move_cnf(move, game_id):
                 "promote": move.promote,
                 "time":    move.time
                 }
-    return json.dumps([game_id, 'move-cnf', move])
+    return json.dumps([game_id, player_id, 'move-cnf', move])
 
-def prepare_sync_cnf(game_id, db, store_key):
+def prepare_sync_cnf(game_id, player_id, db, store_key):
     """ Prepare json for a sync command response. """
     try:
-        return json.dumps([game_id, 'sync-cnf', kfc.to_dict(db, store_key)])
-    except ValueError:
-        return prepare_error_ind(game_id, reason="Invalid game id")
+        board = kfc.RedisKungFuBoard(db, store_key)
+        res = json.dumps([game_id, player_id, 'sync-cnf', 
+            {'board': kfc.to_dict(db, store_key),
+            'white': board.white,
+            'black': board.black}])
+        print("cnf = {}".format(res))
+        return res
+    except ValueError as e:
+        return prepare_error_ind(game_id, player_id, reason=repr(e))
 
 def prepare_exit_cnf():
     return json.dumps(['exit-cnf', multiprocessing.current_process().name])
 
 
-def prepare_error_ind(game_id=-1, **kwargs):
+def prepare_error_ind(game_id=-1, player_id=-1, **kwargs):
     """ prepare an error indication. game_id is -1 if error is not relevant to specific game """
-    return json.dumps([game_id, "error-ind", {k: str(v) for k,v in kwargs.items()}])
+    return json.dumps([game_id, player_id, "error-ind", {k: str(v) for k,v in kwargs.items()}])
 
 if __name__ == "__main__":
     import sys

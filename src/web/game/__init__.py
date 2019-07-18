@@ -20,24 +20,14 @@ def init_game(i_app, i_socketio):
     _t.daemon = True
     _t.start()
 
-#TODO: Move requests to different file.
-#TODO: Numbers..
-def send_sync_req(game_id):
-    push_req("sync-req", None, game_id)
-
-def send_move_req(game_id, move):
-    push_req("move-req", move, game_id)
-
-def send_new_game_req(game_id, cd=1000):
-    push_req("game-req", {"cd": cd}, game_id)
 
 def get_app():
     return _app
 
-def push_req(req, payload, game_id):
+def push_req(req, payload, game_id, player_id):
     q_id = get_app().config["REDIS_GAMES_REQ_QUEUE"]
-    print("[{}] Requesting {} ({}) in {}".format(game_id, req,payload, q_id))
-    _game_redis.rpush (q_id, json.dumps([game_id, req, payload]))
+    print("[{}, {}] Requesting {} ({}) in {}".format(game_id, player_id, req,payload, q_id))
+    _game_redis.rpush (q_id, json.dumps([game_id, player_id, req, payload]))
     _game_redis.expire(q_id, 3600)
 
 def get_cnfs_queue():

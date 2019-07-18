@@ -34,7 +34,7 @@ def rgm(db, in_q, out_q):
     p.daemon = False
     p.start()
     yield (db, in_q, out_q)
-    db.rpush(in_q, json.dumps([-1, "exit-req", None]))
+    db.rpush(in_q, json.dumps([-1, -1, "exit-req", None]))
     try:
         _, res  = db.blpop(out_q, 1)
     except:
@@ -48,8 +48,9 @@ def game_id():
 
 def test_manage_game_quits(rgm):
     db, in_q, out_q = rgm
-    db.rpush(in_q, json.dumps([-1, "exit-req", None]))
+    db.rpush(in_q, json.dumps([-1, -1, "exit-req", None]))
     _, res  = db.blpop(out_q, 1)
+    print(res)
     assert res is not None
     r, _ = json.loads(res)
     assert r == "exit-cnf"
@@ -57,10 +58,10 @@ def test_manage_game_quits(rgm):
 def test_manage_game_cmd_game_req(rgm, game_id):
     db, in_q, out_q = rgm
 
-    db.rpush(in_q, json.dumps([game_id, "game-req", {"cd": 1000}]))
+    db.rpush(in_q, json.dumps([game_id, 0, "game-req", {"cd": 1000}]))
     _, res  = db.blpop(out_q, 1)
     print(res)
-    i, r, d = json.loads(res)
+    i, p, r, d = json.loads(res)
     print(r)
     assert r == "game-cnf"
     assert i == game_id
@@ -68,114 +69,115 @@ def test_manage_game_cmd_game_req(rgm, game_id):
 def test_manage_game_invalid_commands(rgm, game_id):
     db, in_q, out_q = rgm
 
-    db.rpush(in_q, json.dumps([game_id, "game_req", {"cd": 1000}]))
+    db.rpush(in_q, json.dumps([game_id, 0, "game_req", {"cd": 1000}]))
     _, res  = db.blpop(out_q, 1)
     print(res)
-    i, r, d = json.loads(res)
+    i, p, r, d = json.loads(res)
     assert i == -1
     assert r == "error-ind"
 
-    db.rpush(in_q, json.dumps(["game-req", {"gameid": 1, "cd": 1000}]))
+    db.rpush(in_q, json.dumps(["game-req", 0, {"gameid": 1, "cd": 1000}]))
     _, res  = db.blpop(out_q, 1)
-    _, r, d = json.loads(res)
+    _, _, r, d = json.loads(res)
     assert r == "error-ind"
 
-    db.rpush(in_q, json.dumps(["game-req", {"game_id": 1, "cd": 1000}]))
+    db.rpush(in_q, json.dumps(["game-req", 0, {"game_id": 1, "cd": 1000}]))
     _, res  = db.blpop(out_q, 1)
-    _, r, d = json.loads(res)
+    _, _, r, d = json.loads(res)
     assert r == "error-ind"
 
-    db.rpush(in_q, json.dumps([game_id, "game-req", {}]))
+    db.rpush(in_q, json.dumps([game_id, 0, "game-req", {}]))
     _, res  = db.blpop(out_q, 1)
-    _, r, d = json.loads(res)
+    _, _, r, d = json.loads(res)
     assert r == "error-ind"
 
     db.rpush(in_q, json.dumps(["game-req", 1]))
     _, res  = db.blpop(out_q, 1)
-    _, r, d = json.loads(res)
+    _, _, r, d = json.loads(res)
     assert r == "error-ind"
 
     db.rpush(in_q, json.dumps(["game-req", []]))
     _, res  = db.blpop(out_q, 1)
-    _, r, d = json.loads(res)
+    _, _, r, d = json.loads(res)
     assert r == "error-ind"
 
     db.rpush(in_q, json.dumps(["game-req"]))
     _, res  = db.blpop(out_q, 1)
-    _, r, d = json.loads(res)
+    _, _, r, d = json.loads(res)
     assert r == "error-ind"
 
-    db.rpush(in_q, json.dumps(["game-req", game_id, {"cd": 1000}]))
+    db.rpush(in_q, json.dumps(["game-req", game_id, 0, {"cd": 1000}]))
     _, res  = db.blpop(out_q, 1)
-    _, r, d = json.loads(res)
+    _, _, r, d = json.loads(res)
     assert r == "error-ind"
 
 def test_manage_game_make_move(rgm, game_id):
     db, in_q, out_q = rgm
 
-    db.rpush(in_q, json.dumps([game_id, "game-req", {"cd": 1000}]))
+    db.rpush(in_q, json.dumps([game_id, 0, "game-req", {"cd": 1000}]))
     _, res  = db.blpop(out_q, 1)
-    _, r, d = json.loads(res)
+    _, _, r, d = json.loads(res)
     g_in_q = d["in_queue"]
-    db.rpush(g_in_q, json.dumps([game_id, "move-req", {"from": "e2", "to": "e4"}]))
+    db.rpush(g_in_q, json.dumps([game_id, 0, "move-req", {"from": "e2", "to": "e4"}]))
     _, res = db.blpop(out_q, 1)
     res = json.loads(res)
-    assert len(res) == 3
+    assert len(res) == 4
     assert res[0] == game_id
-    assert res[1] == "move-cnf"
+    assert res[2] == "move-cnf"
 
 def test_manage_game_make_move_illegal(rgm, game_id):
     db, in_q, out_q = rgm
 
-    db.rpush(in_q, json.dumps([game_id, "game-req", {"cd": 1000}]))
+    db.rpush(in_q, json.dumps([game_id, 0, "game-req", {"cd": 1000}]))
     _, res  = db.blpop(out_q, 1)
     print(res)
-    _, r, d = json.loads(res)
+    _, _, r, d = json.loads(res)
     g_in_q = d["in_queue"]
-    db.rpush(g_in_q, json.dumps([game_id, "move-req", {"from": "e2", "to": "e1"}]))
+    db.rpush(g_in_q, json.dumps([game_id, 0, "move-req", {"from": "e2", "to": "e1"}]))
     _, res = db.blpop(out_q, 1)
     res = json.loads(res)
-    assert len(res) == 3
+    assert len(res) == 4
     assert res[0] == game_id
-    assert res[1] == "move-cnf"
-    assert res[2] == None
+    assert res[2] == "move-cnf"
+    assert res[3] == None
 
 def test_manage_game_sync_req(rgm, game_id):
     db, in_q, out_q = rgm
 
-    db.rpush(in_q, json.dumps([game_id, "game-req", {"cd": 1000}]))
+    db.rpush(in_q, json.dumps([game_id, 0, "game-req", {"cd": 1000}]))
     _, res  = db.blpop(out_q, 1)
     print(res)
-    _, r, d = json.loads(res)
+    _, _, r, d = json.loads(res)
     g_in_q = d["in_queue"]
 
-    db.rpush(g_in_q, json.dumps([game_id, "sync-req", None]))
-    _, res = db.blpop(out_q, 1)
-    res = json.loads(res)
-    assert len(res) == 3
-    assert res[0] == game_id
-    assert res[1] == "sync-cnf"
-    assert not res[2]["times"]
-
-    db.rpush(g_in_q, json.dumps([game_id, "move-req", {"from": "e2", "to": "e4"}]))
-    db.blpop(out_q, 1)
-
-    db.rpush(g_in_q, json.dumps([game_id, "sync-req", None]))
-    _, res = db.blpop(out_q, 1)
-    res = json.loads(res)
-    assert len(res) == 3
-    assert res[0] == game_id
-    assert res[1] == "sync-cnf"
-    assert "e4" in res[2]["times"]
-
-
-    db.rpush(g_in_q, json.dumps([game_id-1, "sync-req", None]))
+    db.rpush(g_in_q, json.dumps([game_id, 0, "sync-req", None]))
     _, res = db.blpop(out_q, 1)
     res = json.loads(res)
     print(res)
-    assert len(res) == 3
+    assert len(res) == 4
+    assert res[0] == game_id
+    assert res[2] == "sync-cnf"
+    assert not res[3]["board"]["times"]
+
+    db.rpush(g_in_q, json.dumps([game_id, 0, "move-req", {"from": "e2", "to": "e4"}]))
+    db.blpop(out_q, 1)
+
+    db.rpush(g_in_q, json.dumps([game_id, 0, "sync-req", None]))
+    _, res = db.blpop(out_q, 1)
+    res = json.loads(res)
+    assert len(res) == 4
+    assert res[0] == game_id
+    assert res[2] == "sync-cnf"
+    assert "e4" in res[3]["board"]["times"]
+
+
+    db.rpush(g_in_q, json.dumps([game_id-1, 0, "sync-req", None]))
+    _, res = db.blpop(out_q, 1)
+    res = json.loads(res)
+    print(res)
+    assert len(res) == 4
     assert res[0] == game_id-1
-    assert res[1] == "error-ind"
+    assert res[2] == "error-ind"
 
     db.rpush(in_q, json.dumps(["exit-req", None]))
 

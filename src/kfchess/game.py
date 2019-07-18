@@ -375,6 +375,9 @@ class RedisKungFuBoard(KungFuBoard):
         self.inc_move_number()
         return piece
 
+    def set_player(self, color, name):
+        self._set(color, name)
+
     def set_start_time(self, time):
         self._set("start_time", time)
 
@@ -502,6 +505,14 @@ class RedisKungFuBoard(KungFuBoard):
     @property
     def move_number(self):
         return self._get("move_number")
+
+    @property
+    def white(self):
+        return self._get("white")
+
+    @property
+    def black(self):
+        return self._get("black")
 
 @property
 def game_winner(db, store_key):

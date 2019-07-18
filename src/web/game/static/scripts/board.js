@@ -59,8 +59,13 @@ $(window).ready(function() {
     // socket handlers
     //------------------------------------------------------------------------------
 
+    socket.on('ind', function(d)
+    {
+      console.log("got ind" + d);
+    });
     socket.on('sync-cnf', function(sync_desc) {
 
+      console.log(sync_desc)
       var now = Date.now();
       if (sync_desc['result'] == 'fail') { // invalid id or not id
         //TODO: should handle in informative way, shouldn't really happen though
@@ -92,11 +97,13 @@ $(window).ready(function() {
       for (var [key, value] of Object.entries(sync_desc.board.times)) {
         disableSquare(key, cd, value)
       }
+
     });
 
 
     socket.on('move-cnf', function(move_desc) {
 
+      console.log(move_desc)
       if (move_desc['result'] == 'fail') { // move was illegal, update board and ask for resync
         console.log('illegal move response received');
         socket.emit("sync-req", game_id);
@@ -222,7 +229,7 @@ $(window).ready(function() {
     //------------------------------------------------------------------------------
     // Finally do something
     //------------------------------------------------------------------------------
-    socket.emit("sync-req", game_id);
+    socket.emit("join-req", game_id);
 
     var game;
     var disabledSquares = {};
@@ -259,6 +266,7 @@ $(window).ready(function() {
 
     // be nice citizens and close the socket
     $(window).on('beforeunload', function () {
+      console.log("Closing socket")
       socket.close();
     });
 

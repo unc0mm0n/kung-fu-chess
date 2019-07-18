@@ -1,7 +1,7 @@
 import os
 from flask import Flask
 from flask_socketio import SocketIO
-
+from web import defaultconfig
 socketio = SocketIO()
 
 def create_app():

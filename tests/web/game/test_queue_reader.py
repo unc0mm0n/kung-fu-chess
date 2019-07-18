@@ -35,7 +35,7 @@ def env():
 def test_poll_reads_messages_and_responds(env):
     client = env.socketio.test_client(env.app)
     game_id = 1
-    client.emit("join", 1)
+    client.emit("join", game_id)
     env.db.rpush(env.q, json.dumps([game_id, 2, "move-cnf", "test"]))
     env.db.expire(env.q, 10)
     time.sleep(0.1)
