@@ -8,11 +8,15 @@ from flask import Flask
 
 from flask_socketio import SocketIO
 from flask_login import LoginManager
+from flask_mysqldb import MySQL
+from flask_bcrypt import Bcrypt
 
 from web import defaultconfig
 
 socketio = SocketIO()
 login_manager = LoginManager()
+mysql = MySQL()
+bcrypt = Bcrypt()
 
 def create_app():
     app = Flask(__name__)
@@ -20,7 +24,7 @@ def create_app():
     app.config.from_object("web.defaultconfig")
     if "KFCHESS_CONFIG" in os.environ:
         app.config.from_envvar("KFCHESS_CONFIG")
-        print("Using redis at: {}:{}".format(app.config["REDIS_HOSTNAME"], app.config["REDIS_PORT"]))
+        print("Using config at {}".format(os.environ["KFCHESS_CONFIG"]))
     else:
         print("KFCHESS_CONFIG envvar is not present, using default config")
 
@@ -29,6 +33,8 @@ def create_app():
 
     socketio.init_app(app)
     login_manager.init_app(app)
+    mysql.init_app(app)
+    bcrypt.init_app(app)
 
     # this weird local import on create seems to be necessitated by flask-socketio's lack of support of blueprints
     from web.main import main, user

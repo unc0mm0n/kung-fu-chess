@@ -1,7 +1,7 @@
 import json
 
 import flask
-from flask_login import login_user
+from flask_login import login_user, current_user, login_required
 
 from web.main import main
 from web.main.user import User
@@ -18,7 +18,19 @@ def index():
     return flask.render_template("main_page.html", a_games=map(json.loads, active_games)
                                                  , w_games=map(json.loads, waiting_games))
 
-@main.route('/login')
+@main.route('/user/<user_id>')
+def user(user_id):
+    User.create('aa', 'bb')
+    return "You are searching for the user page. It does not exist yet"
+
+@main.route('/logout')
+@login_required
+def logout():
+    logout_user(current_user)
+    return flask.redirect('/')
+
+@main.route('/login', methods=['GET', 'POST'])
 def login():
     login_user(User(3))
     return flask.redirect('/')
+
