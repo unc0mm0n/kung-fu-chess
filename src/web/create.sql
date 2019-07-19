@@ -7,7 +7,6 @@ CREATE TABLE IF NOT EXISTS `user` (
     `player_token` VARCHAR(45) NULL,
     `username` VARCHAR(45) NOT NULL,
     `password` VARCHAR(255) NOT NULL,
-    `password_salt` VARCHAR(255) NOT NULL,
     `email` VARCHAR(127) NULL,
     `rating` SMALLINT NULL,
     `created_on` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,

@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+
+{% block title %}
+Log In
+{% endblock %}
+
+{% block page_content %}
+    <form action="{{ url_for('main.login') }}" method="post">
+        {% if err is defined  and err != ""%}
+        <div class="error"> {{err}} </div>
+        {% endif %}
+        <div class="field">
+            <p class="label">Username:</p>
+            <input type="text" name="username" placeholder="Username" id="username" required />
+        </div>
+        <div class="field">
+            <p class="label"> Password: </p>
+            <input type="password" name="password" placeholder="Password" id="password" required />
+        </div>
+        <div class="submit">
+            <input type="submit" value="Log In" />
+        </div>
+    </form>
+
+{% endblock page_content %}

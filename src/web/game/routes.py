@@ -16,4 +16,4 @@ def index():
 
 @game_bp.route('/<game_id>')
 def view(game_id):
-    return flask.render_template("game_page.html", game_id=game_id)
+    return flask.render_template("game/game_page.html", game_id=game_id)

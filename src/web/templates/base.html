@@ -12,13 +12,13 @@
     {# header #}
     <h1 id="header-title">{{self.title()}}</h1>
     <ul id="navigation">
-        <li>
         {% if current_user.is_authenticated %}
-            hello {{current_user.name}}
+        <li> hello {{current_user.username}} </li>
+        <li><a href="/logout">Log out</a></li>
         {% else %}
-            <li><a href="/login">log in</a></li>
+        <li><a href="/login">Log in</a></li>
+        <li><a href="/register">Register</a></li>
         {% endif %}
-        </li>
 
     </ul>
 
